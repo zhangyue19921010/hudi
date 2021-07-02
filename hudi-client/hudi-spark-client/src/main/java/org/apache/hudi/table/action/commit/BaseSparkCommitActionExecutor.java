@@ -151,13 +151,17 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     // group the records by partitionPath + currentLocation combination, count the number of
     // records in each partition
+    // 对于inputRecords 统计每一个partition共有多少个records
     Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = inputRecordsRDD
         .mapToPair(record -> new Tuple2<>(
             new Tuple2<>(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())), record))
         .countByKey();
 
     // count the number of both inserts and updates in each partition, update the counts to workLoadStats
+    // 遍历所有元素
     for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts.entrySet()) {
+      // [[record partition path, record location] , records number]
+      // 对于 insert 而言 record location 为null
       String partitionPath = e.getKey()._1();
       Long count = e.getValue();
       Option<HoodieRecordLocation> locOption = e.getKey()._2();
@@ -176,6 +180,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
         globalStat.addInserts(count);
       }
     }
+    // partitionPathStatMap [partitionPath, partitionWorkloadStat] 用于统计每个partition中有多少insets以及有哪些file有多少update
+    // globalStat 对于所有partition而言，统计总共有多少insert以及有哪些file有多少update
     return Pair.of(partitionPathStatMap, globalStat);
   }
 

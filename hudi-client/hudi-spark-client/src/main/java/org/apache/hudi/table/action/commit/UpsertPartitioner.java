@@ -108,8 +108,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
 
   private void assignUpdates(WorkloadProfile profile) {
     // each update location gets a partition
+    // PartitionPathStatMap [partitionPath, partitionWorkloadStat] 用于统计每个partition中有多少insets以及有哪些file有多少update
+    //
     Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getPartitionPathStatMap().entrySet();
+    // 遍历所有partition
     for (Map.Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
+      // 遍历所有update
+      // updateLocEntry: [fileId, numbers]
       for (Map.Entry<String, Pair<String, Long>> updateLocEntry :
           partitionStat.getValue().getUpdateLocationToCount().entrySet()) {
         addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey());
@@ -118,7 +123,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
   }
 
   private int addUpdateBucket(String partitionPath, String fileIdHint) {
-    int bucket = totalBuckets;
+    int bucket = totalBuckets; // bucket编号
     updateLocationToBucket.put(fileIdHint, bucket);
     BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, fileIdHint, partitionPath);
     bucketInfoMap.put(totalBuckets, bucketInfo);
@@ -157,6 +162,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
   private void assignInserts(WorkloadProfile profile, HoodieEngineContext context) {
     // for new inserts, compute buckets depending on how many records we have for each partition
     Set<String> partitionPaths = profile.getPartitionPaths();
+
+    // 获取历史平均record大小 size
     long averageRecordSize =
         averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
             config);
@@ -165,12 +172,17 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     Map<String, List<SmallFile>> partitionSmallFilesMap =
         getSmallFilesForPartitions(new ArrayList<String>(partitionPaths), context);
 
+    // Get the in pending clustering fileId for each partition path.
+    // 获取每一个partition中处于pending clustering状态的fileID
     Map<String, Set<String>> partitionPathToPendingClusteringFileGroupsId = getPartitionPathToPendingClusteringFileGroupsId();
 
+    // per partition 去做处理
     for (String partitionPath : partitionPaths) {
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
       if (pStat.getNumInserts() > 0) {
 
+        // 从partitionSmallFilesMap中去掉所有pending clustering的文件
+        // 获取最终所有的小文件 fileIDs
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
                 partitionSmallFilesMap.get(partitionPath));
@@ -184,16 +196,27 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         List<Long> recordsPerBucket = new ArrayList<>();
 
         // first try packing this into one of the smallFiles
+        // 遍历所有smallFiles till totalUnassignedInserts 分配完 或者 small files 遍历完
+        // TODO 现在是可劲儿写一个小文件
+        // TODO 最好是能修改成所有小文件并发写
         for (SmallFile smallFile : smallFiles) {
+          // 对于每个小文件
+          // 计算当前小文件能够append的最大records条数，上限为当前分区的totalUnassignedInserts
           long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
           if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
             // create a new bucket or re-use an existing bucket
             int bucket;
+
+            // 如果当前小文件会涉及到update 则直接获取 当前小文件ID对应的bucket编号
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
             } else {
+              // 如果当前小文件不涉及update
+              // 那么将添加一个insert视为update 去append小文件
+              // 对insert 新建一个update bucket 将部分insert转换为对current small file 的append
+              // 此处会对 totalBuckets++
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
@@ -204,12 +227,23 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         }
 
         // if we have anything more, create new insert buckets, like normal
+        // 如果小文件分配后 仍有Unassigned Inserts records 或者 第一次 ingest 当前分区的数据
+        // 则新建bucket 做insert操作
         if (totalUnassignedInserts > 0) {
+
+          // 获取 hoodie.copyonwrite.insert.split.size 默认值为500,000
           long insertRecordsPerBucket = config.getCopyOnWriteInsertSplitSize();
+          // hoodie.copyonwrite.insert.auto.split 默认为 true
           if (config.shouldAutoTuneInsertSplits()) {
+            // hoodie.parquet.max.file.size 默认120Mb
+            // 根据averageRecordSize 算出insertRecordsPerBucket 每一个bucket需要ingest的record数量
             insertRecordsPerBucket = config.getParquetMaxFileSize() / averageRecordSize;
           }
 
+          // 计算需要新建几个insert bucket 总共所有未分配的records数/每个bucket应该ingest的records数量(用户指定或自动计算)
+          // TODO 用户在这里直接指定insertBuckets 从而控制init 文件数量 以及partition数量即并发度
+          // TODO 现在的workaround是 1.关闭 hoodie.copyonwrite.insert.auto.split 2. 将insertRecordsPerBucket设置为一个比较小的值
+          // TODO workaround的缺点在于需要预估totalUnassignedInserts大小，也就是说控制的不够精确
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
           LOG.info("After small file assignment: unassignedInserts => " + totalUnassignedInserts
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
@@ -218,6 +252,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
             if (b < insertBuckets - 1) {
               recordsPerBucket.add(insertRecordsPerBucket);
             } else {
+              // 最后一批数据
               recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
             }
             BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
@@ -226,12 +261,16 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
           }
         }
 
+        // 至此所有input records已经分配完毕
+
         // Go over all such buckets, and assign weights as per amount of incoming inserts.
         List<InsertBucketCumulativeWeightPair> insertBuckets = new ArrayList<>();
         double curentCumulativeWeight = 0;
+        // 遍历所有bucket编号
         for (int i = 0; i < bucketNumbers.size(); i++) {
           InsertBucket bkt = new InsertBucket();
           bkt.bucketNumber = bucketNumbers.get(i);
+          // 当前bucket ingest record数量的占比
           bkt.weight = (1.0 * recordsPerBucket.get(i)) / pStat.getNumInserts();
           curentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, curentCumulativeWeight));
@@ -247,6 +286,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
+      // 此处看到 会trigger一个job 去探知当前input records中涉及到的partition中的small file的数量
+      // 这个job的并发度等于cover的partition数量
       JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
       partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
           partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
@@ -299,16 +340,22 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
 
   @Override
   public int getPartition(Object key) {
+    // 挑选bucket
+    // pick up bucket for key
     Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation =
         (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
     if (keyLocation._2().isPresent()) {
+      // 如果当前key是update 或者是对小文件append方式的insert，则直接返回相对应的bucket number
       HoodieRecordLocation location = keyLocation._2().get();
       return updateLocationToBucket.get(location.getFileId());
     } else {
+      // 对于新records
       String partitionPath = keyLocation._1().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
       // pick the target bucket to use based on the weights.
       final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
+
+      //TODO MD5 性能可以吗？看下火焰图
       final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
       final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
 
