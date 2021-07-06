@@ -33,6 +33,7 @@ public class WorkloadStat implements Serializable {
 
   private long numUpdates = 0L;
 
+  // 记录当前partition下 每一个FileID一共有多少条updates
   private HashMap<String, Pair<String, Long>> updateLocationToCount;
 
   public WorkloadStat() {

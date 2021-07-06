@@ -192,6 +192,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
+        // 二者顺序有对应关系 bucketNumber 以及当前bucketNumber下要ingest的数据量
         List<Integer> bucketNumbers = new ArrayList<>();
         List<Long> recordsPerBucket = new ArrayList<>();
 
@@ -208,7 +209,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
             // create a new bucket or re-use an existing bucket
             int bucket;
 
-            // 如果当前小文件会涉及到update 则直接获取 当前小文件ID对应的bucket编号
+            // 如果要insert的small file同样会涉及到update 则直接获取 当前小文件ID对应的bucket编号 并填写bucketNumbers以及recordsPerBucket
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
@@ -244,6 +245,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
           // TODO 用户在这里直接指定insertBuckets 从而控制init 文件数量 以及partition数量即并发度
           // TODO 现在的workaround是 1.关闭 hoodie.copyonwrite.insert.auto.split 2. 将insertRecordsPerBucket设置为一个比较小的值
           // TODO workaround的缺点在于需要预估totalUnassignedInserts大小，也就是说控制的不够精确
+          // TODO 或者 disable avgRecordSize计算 并指定一个较大的avg值 使得
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
           LOG.info("After small file assignment: unassignedInserts => " + totalUnassignedInserts
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
@@ -262,7 +264,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         }
 
         // 至此所有input records已经分配完毕
-
+        // 这里很重要
         // Go over all such buckets, and assign weights as per amount of incoming inserts.
         List<InsertBucketCumulativeWeightPair> insertBuckets = new ArrayList<>();
         double curentCumulativeWeight = 0;
@@ -270,7 +272,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         for (int i = 0; i < bucketNumbers.size(); i++) {
           InsertBucket bkt = new InsertBucket();
           bkt.bucketNumber = bucketNumbers.get(i);
-          // 当前bucket ingest record数量的占比
+          // 计算当前bucket下ingest record to append 与 total ingest records 数量的占比
           bkt.weight = (1.0 * recordsPerBucket.get(i)) / pStat.getNumInserts();
           curentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, curentCumulativeWeight));
@@ -338,6 +340,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     return totalBuckets;
   }
 
+  // key => [HoodieKey, HoodieRecordLocation], comes from HoodieRecord
+  // return bucketNumber
   @Override
   public int getPartition(Object key) {
     // 挑选bucket
@@ -345,11 +349,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation =
         (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
     if (keyLocation._2().isPresent()) {
-      // 如果当前key是update 或者是对小文件append方式的insert，则直接返回相对应的bucket number
+      // 如果当前key是update，则直接返回相对应的bucket number
       HoodieRecordLocation location = keyLocation._2().get();
       return updateLocationToBucket.get(location.getFileId());
     } else {
-      // 对于新records
+      // 对于insert records
       String partitionPath = keyLocation._1().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
       // pick the target bucket to use based on the weights.
@@ -359,6 +363,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
       final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
       final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
 
+      // 如果找到关键字，则返回值为关键字在数组中的位置索引，且索引从0开始
+      // 如果没有找到关键字，返回值为负的插入点值，所谓插入点值就是第一个比关键字大的元素在数组中的位置索引，而且这个位置索引从1开始。
       int index = Collections.binarySearch(targetBuckets, new InsertBucketCumulativeWeightPair(new InsertBucket(), r));
 
       if (index >= 0) {
