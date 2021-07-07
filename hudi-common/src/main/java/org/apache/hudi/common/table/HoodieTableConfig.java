@@ -90,6 +90,7 @@ public class HoodieTableConfig implements Serializable {
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     Properties props = new Properties();
+    // '.hoodie/hoodie.properties'
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {

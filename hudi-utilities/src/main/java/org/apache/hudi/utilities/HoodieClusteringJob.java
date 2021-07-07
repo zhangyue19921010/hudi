@@ -53,6 +53,7 @@ public class HoodieClusteringJob {
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
     this.jsc = jsc;
+    // 初始化hoodie相关的配置文件，如果用户指定Path则以Path为准，否则解析--hoodie-conf key=value
     this.props = cfg.propsFilePath == null
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
@@ -99,14 +100,21 @@ public class HoodieClusteringJob {
   }
 
   public static void main(String[] args) {
+    // 初始化配置文件
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
+
+    // --help print details
     if (cfg.help || args.length == 0 || (!cfg.runSchedule && cfg.clusteringInstantTime == null)) {
       cmd.usage();
       System.exit(1);
     }
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+
+    // 实例化HoodieClusteringJob对象 并init 对应配置文件
     HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
+
+    // run clustering job with retry
     int result = clusteringJob.cluster(cfg.retry);
     String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runSchedule: %s",
         cfg.basePath, cfg.tableName, cfg.runSchedule);
@@ -123,6 +131,7 @@ public class HoodieClusteringJob {
     int ret = UtilHelpers.retry(retry, () -> {
       if (cfg.runSchedule) {
         LOG.info("Do schedule");
+        // Schedule -> 生成Cluster Plan并返回对应的instantTime
         Option<String> instantTime = doSchedule(jsc);
         int result = instantTime.isPresent() ? 0 : -1;
         if (result == 0) {
@@ -137,19 +146,33 @@ public class HoodieClusteringJob {
     return ret;
   }
 
+  // 要求至少有一个state=complete action=commit/deltacommit/replacecommit 的Instant
   private String getSchemaFromLatestInstant() throws Exception {
+    // 初始化hoodieTableMetaClient
+    // 可以通过hoodieTableMetaClient获取表的元数据信息 --> .hoodie 目录
+    // It returns meta-data about commits, savepoints, compactions, cleanups as a HoodieTimeline
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).setLoadActiveTimelineOnLoad(true).build();
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    // 从activeTimeline中获取commit deltacommit replacecommit 对应的子timeline 并获取complete状态的Instants
+    // 若没有处于complete状态的instants则报错
     if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       throw new HoodieException("Cannot run clustering without any completed commits");
     }
+
+    // Gets schema for a hoodie table in Avro format without metadata fields.
+    // 因为前面保证了至少有一个可用的instant 以此为base 获取schema
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
   }
 
   private int doCluster(JavaSparkContext jsc) throws Exception {
+    // 基于最新的Instant => 获取最新的schema -- 可以复用
     String schemaStr = getSchemaFromLatestInstant();
+
+    // 初始化SparkRDDWriteClient为hoodieClient
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+
+      // do cluster
       JavaRDD<WriteStatus> writeResponse =
               client.cluster(cfg.clusteringInstantTime, true).getWriteStatuses();
       return UtilHelpers.handleErrors(jsc, cfg.clusteringInstantTime, writeResponse);
@@ -162,8 +185,14 @@ public class HoodieClusteringJob {
   }
 
   private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
+
+    // 基于最新的Instant => 获取最新的schema -- 可以复用
     String schemaStr = getSchemaFromLatestInstant();
+
+    // 初始化SparkRDDWriteClient为hoodieClient
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+
+      // 可以自己设置InstantTime
       if (cfg.clusteringInstantTime != null) {
         client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
         return Option.of(cfg.clusteringInstantTime);

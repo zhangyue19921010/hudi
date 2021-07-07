@@ -861,7 +861,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
+    // 自动生成一个instantTime
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    // schedule clustering plan
     return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -936,6 +938,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     switch (tableServiceType) {
       case CLUSTER:
         LOG.info("Scheduling clustering at instant time :" + instantTime);
+        // createTable => init tableClient(cow/mor)
+        // schedule Clustering
         Option<HoodieClusteringPlan> clusteringPlan = createTable(config, hadoopConf)
             .scheduleClustering(context, instantTime, extraMetadata);
         return clusteringPlan.isPresent() ? Option.of(instantTime) : Option.empty();

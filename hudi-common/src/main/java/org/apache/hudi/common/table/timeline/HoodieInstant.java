@@ -77,15 +77,20 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   /**
    * Load the instant from the meta FileStatus.
+   * 解析文件名 然后初始化：
+   *  1. timestamp
+   *  2. action
+   *  3. state
+   * 这三个字段
    */
   public HoodieInstant(FileStatus fileStatus) {
     // First read the instant timestamp. [==>20170101193025<==].commit
-    String fileName = fileStatus.getPath().getName();
-    String fileExtension = getTimelineFileExtension(fileName);
-    timestamp = fileName.replace(fileExtension, "");
+    String fileName = fileStatus.getPath().getName(); // 20210707095750.replacecommit.requested
+    String fileExtension = getTimelineFileExtension(fileName); // .replacecommit.requested
+    timestamp = fileName.replace(fileExtension, ""); // 20210707095750.replacecommit.requested => 20210707095750
 
     // Next read the action for this marker
-    action = fileExtension.replaceFirst(".", "");
+    action = fileExtension.replaceFirst(".", ""); // .replacecommit.requested => replacecommit.requested
     if (action.equals("inflight")) {
       // This is to support backwards compatibility on how in-flight commit files were written
       // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight

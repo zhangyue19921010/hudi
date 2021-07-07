@@ -163,10 +163,13 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
+    // get schema from Commit Metadata
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(includeMetadataFields);
     if (schemaFromCommitMetadata.isPresent()) {
       return schemaFromCommitMetadata.get();
     }
+
+    // get schema from Table config
     Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
     if (schemaFromTableConfig.isPresent()) {
       if (includeMetadataFields) {
@@ -175,6 +178,8 @@ public class TableSchemaResolver {
         return schemaFromTableConfig.get();
       }
     }
+
+    // get schema from data file
     if (includeMetadataFields) {
       return getTableAvroSchemaFromDataFile();
     } else {

@@ -60,6 +60,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
+  // valid extension in active timeline
+  // .commit | .commit.requested | .inflight
+  // .deltacommit | .deltacommit.requested | .deltacommit.inflight
+  // .savepoint | .savepoint.inflight
+  // .clean | .clean.requested | .clean.inflight
+  // .compaction.requested | .compaction.inflight
+  // .restore | .restore.inflight
+  // .replacecommit | .replacecommit.requested | .replacecommit.inflight
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
       DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION,

@@ -53,11 +53,16 @@ public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> ex
   @Override
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
+    // 获取最后一次完成的Replace Instant
     Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
 
+    // count 自lastClusteringInstant后有多少少个Commit-Complete Instant
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
+
+    // 判断是否满足 hoodie.clustering.inline.max.commits
+    // 满足则返回Empty
     if (config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
       LOG.info("Not scheduling clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
@@ -66,6 +71,8 @@ public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> ex
     }
 
     LOG.info("Generating clustering plan for table " + config.getBasePath());
+    // 这里可以通过 hoodie.clustering.plan.strategy.class 自定义clustering plan 策略
+    // 默认使用 org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy
     ClusteringPlanStrategy strategy = (ClusteringPlanStrategy)
         ReflectionUtils.loadClass(config.getClusteringPlanStrategyClass(), table, context, config);
     return strategy.generateClusteringPlan();

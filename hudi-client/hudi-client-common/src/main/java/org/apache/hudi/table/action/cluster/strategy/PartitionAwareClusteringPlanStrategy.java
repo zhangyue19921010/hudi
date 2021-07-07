@@ -64,9 +64,12 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
     LOG.info("Scheduling clustering for " + metaClient.getBasePath());
     HoodieWriteConfig config = getWriteConfig();
+
+    // 获取当前hudi表的所有partition Path
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
+    // 从partition全集里根据特定策略筛选指定要clustering的partition
     partitionPaths = filterPartitionPaths(partitionPaths);
 
     if (partitionPaths.isEmpty()) {
@@ -76,6 +79,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
 
     List<HoodieClusteringGroup> clusteringGroups = getEngineContext().flatMap(partitionPaths,
         partitionPath -> {
+          // 获取有资格进行clustering的file slice
+          // FileIds in pending clustering/compaction are not eligible(资格) for clustering.
           List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
           return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
         },

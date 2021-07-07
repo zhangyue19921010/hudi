@@ -268,8 +268,11 @@ public class FSUtils {
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                                   String basePathStr) {
+    // 创建hoodieTableMetaClient
+    // 这里如果开启 hoodie.metadata.enable 则创建一个 HoodieBackedTableMetadata 否则创建一个 FileSystemBackedTableMetadata
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
         FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+      // 利用engine去获取所有的partition(job) 以.hoodie_partition_metadata为迭代的终止标记
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);

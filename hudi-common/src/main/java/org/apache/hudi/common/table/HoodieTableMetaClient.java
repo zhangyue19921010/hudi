@@ -105,11 +105,14 @@ public class HoodieTableMetaClient implements Serializable {
     this.hadoopConf = new SerializableConfiguration(conf);
     Path basePathDir = new Path(basePath);
     this.basePath = basePathDir.toString();
+    // meta path '.hoodie/'
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
     TableNotFoundException.checkTableValidity(fs, basePathDir, metaPathDir);
+    // 根据 '.hoodie/hoodie.properties'初始化tableConfig
     this.tableConfig = new HoodieTableConfig(fs, metaPath, payloadClassName);
+    // table type cow/mor
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -124,6 +127,8 @@ public class HoodieTableMetaClient implements Serializable {
         + this.tableConfig.getBaseFileFormat() + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
+      // 加载 active timeline
+      // 单例模式 只会创建并初始化一次
       getActiveTimeline();
     }
   }
@@ -473,6 +478,9 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
       boolean applyLayoutVersionFilters) throws IOException {
+
+    // 过滤出'.hoodie'元数据目录下所有后缀包含includedExtensions内的所有文件 例如 20210706200326.commit 以及 20210707095750.replacecommit.requested
+    // 根据过滤得到的文件分别生成HoodieInstant对象
     Stream<HoodieInstant> instantStream = Arrays.stream(
         HoodieTableMetaClient
             .scanFiles(getFs(), timelinePath, path -> {
@@ -481,7 +489,11 @@ public class HoodieTableMetaClient implements Serializable {
               return includedExtensions.contains(extension);
             })).map(HoodieInstant::new);
 
+    // Depending on Timeline layout version, if there are multiple states for the same action instant, only include the highest state
+    // As for v1     REQUESTED < INFLIGHT < COMPLETED < INVALID
     if (applyLayoutVersionFilters) {
+      // 相同instant不同的state只保留最大的state
+      // [20210707095750.replacecommit, 20210707095750.replacecommit.inflight, 20210707095750.replacecommit.requested] => 20210707095750.replacecommit(COMPLETE)
       instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
     }
     return instantStream.sorted().collect(Collectors.toList());
