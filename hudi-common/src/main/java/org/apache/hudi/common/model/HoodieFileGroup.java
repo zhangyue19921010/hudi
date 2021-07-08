@@ -51,6 +51,9 @@ public class HoodieFileGroup implements Serializable {
 
   /**
    * Timeline, based on which all getter work.
+   * visibleCommitsAndCompactionTimeline
+   * visible => complete
+   * commits => commit/deltacommit/replacecommit
    */
   private final HoodieTimeline timeline;
 

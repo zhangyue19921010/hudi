@@ -158,12 +158,18 @@ public class FileSystemViewManager {
   private static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig viewConf,
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
+
+    // 获取active timeline 并筛选出所有complete以及compaction相关的Instant构建 timeline
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+
+    // meta enable 则使用meta based的HoodieMetadataFileSystemView
+    // 否则使用 HoodieTableFileSystemView
     if (metadataConfig.useFileListingMetadata()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
       return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           metadataSupplier.get());
     }
+    // 新建并初始化 HoodieTableFileSystemView, init():
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 

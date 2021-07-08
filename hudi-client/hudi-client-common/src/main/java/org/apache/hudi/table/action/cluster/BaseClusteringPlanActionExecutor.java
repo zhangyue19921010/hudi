@@ -55,6 +55,8 @@ public abstract class BaseClusteringPlanActionExecutor<T extends HoodieRecordPay
   public Option<HoodieClusteringPlan> execute() {
     // 创建Clustering plan
     Option<HoodieClusteringPlan> planOption = createClusteringPlan();
+
+    // 将新生成的cluster plan写入到.hoodie目录下并标记为.replacecommit.request
     if (planOption.isPresent()) {
       HoodieInstant clusteringInstant =
           new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);

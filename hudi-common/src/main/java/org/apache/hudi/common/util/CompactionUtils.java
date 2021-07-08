@@ -130,10 +130,12 @@ public class CompactionUtils {
    */
   public static List<Pair<HoodieInstant, HoodieCompactionPlan>> getAllPendingCompactionPlans(
       HoodieTableMetaClient metaClient) {
+    // 获取active time line, 过滤出所有未完成的compaction(requested/inflight),得到对应HoodieInstant
     List<HoodieInstant> pendingCompactionInstants =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
     return pendingCompactionInstants.stream().map(instant -> {
       try {
+        // 根据uncompleted compaction instant 去获取compaction plan 并构建元组返回
         return Pair.of(instant, getCompactionPlan(metaClient, instant.getTimestamp()));
       } catch (IOException e) {
         throw new HoodieException(e);
@@ -157,6 +159,7 @@ public class CompactionUtils {
    */
   public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> getAllPendingCompactionOperations(
       HoodieTableMetaClient metaClient) {
+    // 获取所有处于pending compaction状态的plans
     List<Pair<HoodieInstant, HoodieCompactionPlan>> pendingCompactionPlanWithInstants =
         getAllPendingCompactionPlans(metaClient);
 

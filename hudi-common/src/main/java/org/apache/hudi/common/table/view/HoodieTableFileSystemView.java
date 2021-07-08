@@ -67,6 +67,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   /**
    * Track replace time for replaced file groups.
+   * 记录当前table下所有发生过replace的fileIDs
    */
   protected Map<HoodieFileGroupId, HoodieInstant> fgIdToReplaceInstants;
 
@@ -100,6 +101,18 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     init(metaClient, visibleActiveTimeline);
   }
 
+  /**
+   * init 都做了哪些事：
+   *    1. createPartitionToFileGroups() => new ConcurrentHashMap<>() for in Memory type
+   *    2. init()
+   *      a). resetFileGroupsReplaced => fgIdToReplaceInstants
+   *      b). resetPendingCompactionOperations => fgIdToPendingCompaction
+   *      c). resetBootstrapBaseFileMapping => fgIdToBootstrapBaseFile
+   *      d). resetFileGroupsInPendingClustering => fgIdToPendingClustering
+   *      P.S pending means 'requested' and 'inflight'
+   * @param metaClient
+   * @param visibleActiveTimeline 从active timeline 中筛选出所有complete以及compaction相关的Instant构建 timeline
+   */
   @Override
   public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.partitionToFileGroupsMap = createPartitionToFileGroups();

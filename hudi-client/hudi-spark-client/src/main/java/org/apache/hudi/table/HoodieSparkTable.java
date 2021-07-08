@@ -42,10 +42,15 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   }
 
   public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+    // create meta Client
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
+
+    // 创建HoodieSparkTable对象
+    // 这里很重要 因为 HoodieSparkTable 对象会持有 FileSystemViewManager
+    // 而通过 FileSystemViewManager 能够去创建 HoodieTableFileSystemView ！！ createInMemoryFileSystemView
     return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
   }
 

@@ -80,6 +80,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected HoodieTableMetaClient metaClient;
 
   // This is the commits timeline that will be visible for all views extending this view
+  // COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
 
   // Used to concurrently load and populate partition views
@@ -102,13 +103,24 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
+
+    // 初始化 visibleCommitsAndCompactionTimeline => Timeline to just include commits (commit/deltacommit), compaction and replace actions.
+    // 结合上文 这里的都是commits (commit/deltacommit completed), compaction and replace actions(completed).
     refreshTimeline(visibleActiveTimeline);
+
+    // 根据completed replace元数据 找到所有replaced fileIds 并更新至 fgIdToReplaceInstants
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
-    // Load Pending Compaction Operations
+
+    // Load Pending Compaction Operations to fgIdToPendingCompaction
+    //
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
+
+    // fgIdToBootstrapBaseFile
     resetBootstrapBaseFileMapping(Stream.empty());
+
+    // Load all the Pending Clustering('requested' and 'inflight') fgId to fgIdToPendingClustering
     resetFileGroupsInPendingClustering(ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient));
   }
 
@@ -118,6 +130,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param visibleActiveTimeline Visible Active Timeline
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
+    // COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION
     this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline.getWriteTimeline();
   }
 
@@ -206,18 +219,26 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Get replaced instant for each file group by looking at all commit instants.
+   * timeline => commit/deltacommit (completed), compaction and replace actions(completed).
+   *
+   * 记录当前table中所有发生过replace 的fileID 构建HoodieFileGroupId对象 并更新到 fgIdToReplaceInstants
    */
   private void resetFileGroupsReplaced(HoodieTimeline timeline) {
     HoodieTimer hoodieTimer = new HoodieTimer();
     hoodieTimer.startTimer();
     // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
+    // 从timeline中获取所有完成的Replace Instant构成新的timeline
     HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
+
+    // [replaced file group Id, HoodieInstant]
     Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstants().flatMap(instant -> {
       try {
+        // 反序列化 replace metadata
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
             HoodieReplaceCommitMetadata.class);
 
-        // get replace instant mapping for each partition, fileId
+        // get replace instant mapping for each partition, file group Id
+        // 获取 partitionToReplaceFileIds 字段，该字段记录了partition->replacedFileIDs
         return replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().flatMap(entry -> entry.getValue().stream().map(e ->
                 new AbstractMap.SimpleEntry<>(new HoodieFileGroupId(entry.getKey(), e), instant)));
       } catch (IOException e) {
@@ -225,6 +246,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
     });
 
+    // 将resultStream转换为Map
     Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups = resultStream.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     resetReplacedFileGroups(replacedFileGroups);
     LOG.info("Took " + hoodieTimer.endTimer() + " ms to read  " + replacedTimeline.countInstants() + " instants, "
@@ -348,6 +370,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Returns true if the file-group is under pending-compaction and the file-slice' baseInstant matches compaction
    * Instant.
+   * 这说明compaction未完成 但file-slice已经生成 也就是说处于蒸菜compact写数据的阶段
    *
    * @param fileSlice File Slice
    */
@@ -372,7 +395,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // instant not completed yet.
       FileSlice transformed =
           new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
-      fileSlice.getLogFiles().forEach(transformed::addLogFile);
+      fileSlice.getLogFiles().forEach(transformed::addLogFile);  // new FileSlice but base file null
       return transformed;
     }
     return fileSlice;
@@ -536,14 +559,24 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  /**
+   * 滤除 replaced file slice
+   * 滤除 filterBaseFileAfterPendingCompaction
+   * 滤除 addBootstrapBaseFileIfPresent
+   * @param partitionStr
+   * @return
+   */
   @Override
   public final Stream<FileSlice> getLatestFileSlices(String partitionStr) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
+
+      // build file group View based on visibleCommitsAndCompactionTimeline
       ensurePartitionLoadedCorrectly(partitionPath);
-      return fetchLatestFileSlices(partitionPath)
-          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
+
+      return fetchLatestFileSlices(partitionPath) // 获取每个file group中最新的file slice
+          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())) // 去除所有 被replaced的file groups中的文件 (包含在fgIdToReplaceInstants中的文件都应被滤除)
           .map(this::filterBaseFileAfterPendingCompaction)
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {

@@ -241,6 +241,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
   //-----------------------------------------------------------------
 
+  /**
+   * 从 .hoodie/aux/instantFileName 中读取 CompactPlan
+   * @param instant
+   * @return
+   */
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
     try {
       // Reading from auxiliary path first. In future release, we will cleanup compaction management

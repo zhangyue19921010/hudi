@@ -113,7 +113,7 @@ public class SparkRecentDaysClusteringPlanStrategy<T extends HoodieRecordPayload
   protected List<String> filterPartitionPaths(List<String> partitionPaths) {
     int targetPartitionsForClustering = getWriteConfig().getTargetPartitionsForClustering();
     return partitionPaths.stream()
-        .sorted(Comparator.reverseOrder())
+        .sorted(Comparator.reverseOrder()) // 倒序 新的partition在前面
         .limit(targetPartitionsForClustering > 0 ? targetPartitionsForClustering : partitionPaths.size())
         .collect(Collectors.toList());
   }
