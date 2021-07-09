@@ -384,13 +384,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   /**
    * Common method containing steps to be performed before write (upsert/insert/...
+   * 1. setOperationType
+   * 2. get Last Completed TxnInstant And Metadata [commit/deltacommit/replacecommit]
+   * 3. syncTableMetadata when hoodie.metadata.enable true
+   * 4. start async cleaner service
    * @param instantTime
    * @param writeOperationType
    * @param metaClient
    */
   protected void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
+    // 设置Operation的类型
     setOperationType(writeOperationType);
+    // 获取Last Completed Commit[commit/deltacommit/replacecommit] Instant 以及对应的meta
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
     this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
         .isPresent()

@@ -333,16 +333,29 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> cluster(String clusteringInstant, boolean shouldComplete) {
+    // 初始化HoodieSparkTable对象 table
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
+    // preWrite
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+
+    // 获取 pending(uncompleted) clustering replace timeline
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
+
+    // 根据给定的clusteringInstant 创建inflight类型的 HoodieInstant对象
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
+    // inflightInstant 存在于 pendingClusteringTimeline 中
+    // 则说明之前执行过但是没有complete => 此时需要进行回滚操作
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
+      // rollback including data and metadata
       rollbackInflightClustering(inflightInstant, table);
+      // The timeline is not automatically reloaded on any mutation operation, clients have to manually call reload() so that
+      // they can chain multiple mutations to the timeline and then call reload() once.
       table.getMetaClient().reloadActiveTimeline();
     }
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at " + clusteringInstant);
+
+    // do actual cluster now!
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = table.cluster(context, clusteringInstant);
     JavaRDD<WriteStatus> statuses = clusteringMetadata.getWriteStatuses();
     // TODO : Where is shouldComplete used ?

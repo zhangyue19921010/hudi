@@ -84,9 +84,11 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
+    // 获取指定instantTime对应的requested Instant
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
     // Mark instant as clustering inflight
     table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+    // 状态文件的更改后 需要reloadActiveTimeline 才能将更改后的文件加载到timeline中
     table.getMetaClient().reloadActiveTimeline();
 
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(context);
@@ -100,6 +102,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
     JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
+
+    // trigger rdd action through collect
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
     // validate clustering action before committing result
     validateWriteResult(writeMetadata);
