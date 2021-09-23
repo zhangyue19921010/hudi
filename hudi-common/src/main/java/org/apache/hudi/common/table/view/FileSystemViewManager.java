@@ -181,8 +181,8 @@ public class FileSystemViewManager {
                                                                                    HoodieMetadataConfig metadataConfig,
                                                                                    HoodieTimeline timeline) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (true) {
-      LOG.info("Creating HoodieMetadataFileSystemView ");
+    if (metadataConfig.enabled()) {
+      LOG.info("Creating HoodieMetadataFileSystemView");
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
