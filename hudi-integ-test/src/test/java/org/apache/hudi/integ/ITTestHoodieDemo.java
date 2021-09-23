@@ -136,7 +136,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // batch 1
     ingestFirstBatchAndHiveSyncWithMetadataEnable();
     testPrestoAfterFirstBatchWithMetaDataEnable();
-    testSparkSQLAfterFirstBatch();
+//    testSparkSQLAfterFirstBatch();
   }
 
   @Test
