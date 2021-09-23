@@ -129,6 +129,17 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   @Test
+  public void testParquetDemoWithMetadataEnable() throws Exception {
+    baseFileFormat = HoodieFileFormat.PARQUET;
+
+    setupDemo();
+    // batch 1
+    ingestFirstBatchAndHiveSyncWithMetadataEnable();
+    testPrestoAfterFirstBatch();
+    testSparkSQLAfterFirstBatch();
+  }
+
+  @Test
   @Disabled
   public void testHFileDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.HFILE;
@@ -241,6 +252,42 @@ public class ITTestHoodieDemo extends ITTestBase {
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, bootstrapCmds);
   }
 
+  private void ingestFirstBatchAndHiveSyncWithMetadataEnable() throws Exception {
+    List<String> cmds = CollectionUtils.createImmutableList(
+            "spark-submit"
+                    + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+                    + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+                    + " --table-type COPY_ON_WRITE "
+                    + " --base-file-format " + baseFileFormat.toString()
+                    + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+                    + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
+                    + " --hoodie-conf hoodie.metadata.enable=true"
+                    + " --props /var/demo/config/dfs-source.properties"
+                    + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider ",
+            "spark-submit --class org.apache.hudi.hive.HiveSyncTool " + HUDI_HIVE_SYNC_BUNDLE
+                    + " --database default"
+                    + " --table " + COW_TABLE_NAME
+                    + " --base-path " + COW_BASE_PATH
+                    + " --base-file-format " + baseFileFormat.toString()
+                    + " --user hive"
+                    + " --pass hive"
+                    + " --jdbc-url jdbc:hive2://hiveserver:10000"
+                    + " --partitioned-by dt",
+            ("spark-submit"
+                    + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+                    + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+                    + " --table-type MERGE_ON_READ "
+                    + " --hoodie-conf hoodie.metadata.enable=true"
+                    + " --base-file-format " + baseFileFormat.toString()
+                    + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+                    + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
+                    + " --props /var/demo/config/dfs-source.properties"
+                    + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+                    + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME)));
+
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
+  }
+
   private void testHiveAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_TBLCHECK_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| stock_ticks_cow     |");
@@ -333,6 +380,20 @@ public class ITTestHoodieDemo extends ITTestBase {
         "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
+  }
+
+  private void testPrestoAfterFirstBatchWithMetaDataEnable() throws Exception {
+    Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_TABLE_CHECK_PATH);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_cow", 2);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor",4);
+
+    stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
+    assertStdOutContains(stdOutErrPair,
+            "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
+    assertStdOutContains(stdOutErrPair,
+            "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
+    assertStdOutContains(stdOutErrPair,
+            "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
   }
 
   private void testHiveAfterSecondBatch() throws Exception {
