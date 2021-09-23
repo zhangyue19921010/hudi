@@ -135,7 +135,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     setupDemo();
     // batch 1
     ingestFirstBatchAndHiveSyncWithMetadataEnable();
-    testPrestoAfterFirstBatch();
+    testPrestoAfterFirstBatchWithMetaDataEnable();
     testSparkSQLAfterFirstBatch();
   }
 
@@ -384,8 +384,8 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testPrestoAfterFirstBatchWithMetaDataEnable() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_TABLE_CHECK_PATH);
-    assertStdOutContains(stdOutErrPair, "stock_ticks_cow", 2);
-    assertStdOutContains(stdOutErrPair, "stock_ticks_mor",4);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_cow", 1);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor",2);
 
     stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
     assertStdOutContains(stdOutErrPair,

@@ -173,15 +173,15 @@ public class FileSystemViewManager {
     
     return createInMemoryFileSystemViewWithTimeline(engineContext, metaClient, metadataConfig,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-    
+
   }
-  
+
   public static HoodieTableFileSystemView createInMemoryFileSystemViewWithTimeline(HoodieEngineContext engineContext,
                                                                                    HoodieTableMetaClient metaClient,
                                                                                    HoodieMetadataConfig metadataConfig,
                                                                                    HoodieTimeline timeline) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (metadataConfig.enabled()) {
+    if (true) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
