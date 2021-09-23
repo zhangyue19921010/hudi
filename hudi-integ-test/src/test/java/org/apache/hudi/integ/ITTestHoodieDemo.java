@@ -90,7 +90,7 @@ public class ITTestHoodieDemo extends ITTestBase {
           + " --hoodie-conf hoodie.datasource.hive_sync.database=default "
           + " --hoodie-conf hoodie.datasource.hive_sync.table=%s";
 
-  @AfterEach
+//  @AfterEach
   public void clean() throws Exception {
     String hdfsCmd = "hdfs dfs -rm -R ";
     List<String> tablePaths = CollectionUtils.createImmutableList(
