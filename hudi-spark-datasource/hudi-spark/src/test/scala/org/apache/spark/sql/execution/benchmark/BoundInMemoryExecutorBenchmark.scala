@@ -33,6 +33,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
   protected val spark: SparkSession = getSparkSession
 
   val recordNumber = 1000000
+  val df = createDataFrame(recordNumber)
 
   def getSparkSession: SparkSession = SparkSession.builder()
     .master("local[*]")
@@ -73,7 +74,6 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
    * Disruptor Executor                                 2758           2778          28          0.4        2757.7       2.0X
    */
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
-    val df = createDataFrame(recordNumber)
     withTempDir {f =>
       val benchmark = new HoodieBenchmark("COW Ingestion", recordNumber)
       benchmark.addCase("BoundInMemory Executor") { _ =>
