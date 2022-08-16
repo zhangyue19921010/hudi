@@ -36,6 +36,8 @@ import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -49,6 +51,8 @@ import static java.util.stream.Collectors.toList;
  */
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
     implements OneInputStreamOperator<Object, CompactionPlanEvent>, BoundedOneInput {
+
+  protected static final Logger LOG = LoggerFactory.getLogger(CompactionPlanOperator.class);
 
   /**
    * Config options.

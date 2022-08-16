@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -49,6 +50,23 @@ public class HadoopConfigurations {
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
+    /** In order to be compatible with S3AFileSystem initialization in org.apache.hadoop:hadoop-aws:2.7.3 **/
+    if (conf.get(FlinkOptions.PATH) != null && conf.get(FlinkOptions.PATH).startsWith("s3a://")) {
+      if (StringUtils.nonEmpty(hadoopConf.get("fs.s3a.multipart.size"))) {
+        hadoopConf.set("fs.s3a.multipart.size", "104857600");  // 100M
+      }
+      if (StringUtils.nonEmpty(hadoopConf.get("fs.s3a.block.size"))) {
+        hadoopConf.set("fs.s3a.block.size", "33554432");  // 32M
+      }
+      if (StringUtils.nonEmpty(hadoopConf.get("fs.s3a.threads.max"))) {
+        hadoopConf.set("fs.s3a.threads.max", "256");
+      }
+      String credentialsProvider = StringUtils.isNullOrEmpty(conf.getString("hadoop.fs.s3a.session.token", null))
+              ? "org.apache.hadoop.fs.s3a.BasicAWSCredentialsProvider"
+              : "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
+      hadoopConf.set("fs.s3a.aws.credentials.provider", credentialsProvider);
+      hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+    }
     Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
     options.forEach(hadoopConf::set);
     return hadoopConf;

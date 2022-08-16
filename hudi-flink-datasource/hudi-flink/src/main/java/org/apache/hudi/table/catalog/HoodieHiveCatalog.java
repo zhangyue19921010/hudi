@@ -540,6 +540,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
+    properties.put("storageType", "hudi");
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
