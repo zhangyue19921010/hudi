@@ -203,4 +203,10 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
+
+
+  /**
+   * Load all partition and file slices into view
+   */
+  Void loadAllPartitions();
 }

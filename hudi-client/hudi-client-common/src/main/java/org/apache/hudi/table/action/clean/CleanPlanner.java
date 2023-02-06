@@ -101,6 +101,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     this.fgIdToPendingLogCompactionOperations = fileSystemView.getPendingLogCompactionOperations()
         .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    if (config.isMetadataTableEnabled() && config.getCleanerPolicy().equals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)) {
+      LOG.info("Load all partitions and files into file system view in advance when using KEEP_LATEST_FILE_VERSIONS.");
+      fileSystemView.loadAllPartitions();
+    }
   }
 
   /**
