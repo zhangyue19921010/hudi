@@ -734,7 +734,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
-
   @Override
   public Void loadAllPartitions() {
     try {
