@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -102,7 +103,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    if (config.isMetadataTableEnabled() && config.getCleanerPolicy().equals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)) {
+    // load all partitions in advance if necessary.
+    if (config.isMetadataTableEnabled()
+        && config.getCleanerPolicy().equals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        && (config.getViewStorageConfig().getStorageType().equals(FileSystemViewStorageType.MEMORY)
+            || (config.getViewStorageConfig().getStorageType().equals(FileSystemViewStorageType.REMOTE_FIRST)
+                && config.getViewStorageConfig().getSecondaryStorageType().equals(FileSystemViewStorageType.MEMORY)))) {
       LOG.info("Load all partitions and files into file system view in advance when using KEEP_LATEST_FILE_VERSIONS.");
       fileSystemView.loadAllPartitions();
     }
