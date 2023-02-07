@@ -18,9 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -45,7 +43,6 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
