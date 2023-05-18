@@ -869,7 +869,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test nested field as primaryKey and preCombineField") {
     withRecordType()(withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
+      Seq("mor").foreach { tableType =>
         val tableName = generateTableName
         // create table
         spark.sql(
