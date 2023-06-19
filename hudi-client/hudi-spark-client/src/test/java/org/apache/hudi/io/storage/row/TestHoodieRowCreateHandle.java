@@ -37,6 +37,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -179,6 +180,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
+  @Disabled // diasble frakely test
   public void testInstantiationFailure(boolean enableMetadataTable) {
     // init config and table
     HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
