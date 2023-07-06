@@ -36,6 +36,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.dim.HoodieLookupTableFunction;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.FileIndex;
@@ -71,7 +72,9 @@ import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
+import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsPartitionPushDown;
@@ -88,10 +91,13 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -107,6 +113,7 @@ import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
  */
 public class HoodieTableSource implements
     ScanTableSource,
+    LookupTableSource,
     SupportsPartitionPushDown,
     SupportsProjectionPushDown,
     SupportsLimitPushDown,
@@ -211,6 +218,36 @@ public class HoodieTableSource implements
         }
       }
     };
+  }
+
+  @Override
+  public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext lookupContext) {
+    Duration reloadInterval = conf.get(FlinkOptions.LOOKUP_JOIN_CACHE_TTL);
+    int[][] keys = lookupContext.getKeys();
+    int[] keyIndices = new int[keys.length];
+    int keyIndicesNum = 0;
+    for (int[] key : keys) {
+      if (key.length > 1) {
+        throw new UnsupportedOperationException(
+            "Hive lookup can not support nested key now.");
+      }
+      keyIndices[keyIndicesNum] = key[0];
+      keyIndicesNum++;
+    }
+    RowType typeInfo = (RowType) getProducedDataType().getLogicalType();
+    Iterator<Map.Entry<String, String>> it = hadoopConf.iterator();
+    HashMap<String, String> hadoopMap = new HashMap<>();
+    while (it.hasNext()) {
+      Map.Entry<String, String> entry = it.next();
+      hadoopMap.put(entry.getKey(), entry.getValue());
+    }
+    String[] schemaFieldNames = this.schema.getColumnNames().toArray(new String[0]);
+    DataType[] schemaTypes = this.schema.getColumnDataTypes().toArray(new DataType[0]);
+
+    HoodieLookupTableFunction hoodieLookupTableFunction =
+        new HoodieLookupTableFunction(reloadInterval, typeInfo, keyIndices, conf, tableRowType, maxCompactionMemoryInBytes, requiredPos, limit, requiredPartitions, partitionKeys, hadoopMap,
+            schemaFieldNames, schemaTypes, internalSchemaManager);
+    return TableFunctionProvider.of(hoodieLookupTableFunction);
   }
 
   @Override

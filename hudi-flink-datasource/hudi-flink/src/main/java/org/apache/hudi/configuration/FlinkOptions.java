@@ -45,6 +45,7 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -909,6 +910,15 @@ public class FlinkOptions extends HoodieConfig {
           .stringType()
           .defaultValue(HoodieSyncTableStrategy.ALL.name())
           .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
+
+  // -------------------------------------------------------------------------
+  //  Lookup Table Options
+  // -------------------------------------------------------------------------
+  public static final ConfigOption<Duration> LOOKUP_JOIN_CACHE_TTL = ConfigOptions.key("lookup.join.cache.ttl")
+      .durationType()
+      .defaultValue(Duration.ofMinutes(60))
+      .withDescription(
+          "Interval between reloading table data.");
 
   // -------------------------------------------------------------------------
   //  Utilities
