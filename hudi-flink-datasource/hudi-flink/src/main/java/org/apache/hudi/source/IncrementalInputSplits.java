@@ -294,7 +294,7 @@ public class IncrementalInputSplits implements Serializable {
       }
 
       final String endInstant = instantToIssue.getTimestamp();
-      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(),
           fileStatuses, readPartitions, endInstant, null, false);
 
       return Result.instance(inputSplits, endInstant);
