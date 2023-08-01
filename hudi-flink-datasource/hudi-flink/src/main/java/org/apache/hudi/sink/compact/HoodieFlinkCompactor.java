@@ -133,12 +133,12 @@ public class HoodieFlinkCompactor {
     /**
      * Flink Compaction Config.
      */
-    private final FlinkCompactionConfig cfg;
+    protected final FlinkCompactionConfig cfg;
 
     /**
      * Flink Config.
      */
-    private final Configuration conf;
+    protected final Configuration conf;
 
     /**
      * Meta Client.
@@ -148,12 +148,12 @@ public class HoodieFlinkCompactor {
     /**
      * Write Client.
      */
-    private final HoodieFlinkWriteClient<?> writeClient;
+    protected final HoodieFlinkWriteClient<?> writeClient;
 
     /**
      * The hoodie table.
      */
-    private final HoodieFlinkTable<?> table;
+    protected final HoodieFlinkTable<?> table;
 
     /**
      * Executor Service.
@@ -213,7 +213,7 @@ public class HoodieFlinkCompactor {
       }, executor), executor);
     }
 
-    private void compact() throws Exception {
+    protected void compact() throws Exception {
       table.getMetaClient().reloadActiveTimeline();
 
       // checks the compaction plan and do compaction.

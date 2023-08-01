@@ -65,6 +65,10 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnable = false;
 
+  @Parameter(names = {"--clean-after-compact-enabled"}, description = "Whether to cleanup the old commits "
+      + "immediately on new commits, enabled by default")
+  public Boolean cleanAfterCompact = false;
+
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
@@ -144,6 +148,7 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
     conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
+    conf.setBoolean(FlinkOptions.CLEAN_AFTER_COMPACT_ENABLED, config.cleanAfterCompact);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);

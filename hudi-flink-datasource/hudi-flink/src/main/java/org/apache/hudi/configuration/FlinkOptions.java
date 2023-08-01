@@ -629,6 +629,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
+  public static final ConfigOption<Boolean> CLEAN_AFTER_COMPACT_ENABLED = ConfigOptions
+      .key("clean.after.compact.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to cleanup the old commits immediately on new commits after compaction committed, enabled by default");
+
   public static final ConfigOption<String> CLEAN_POLICY = ConfigOptions
       .key("clean.policy")
       .stringType()

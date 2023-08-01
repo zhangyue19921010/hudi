@@ -621,6 +621,17 @@
       </dependencies>
     </profile>
     <profile>
+      <id>flink-bundle-add-orc-dependency</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.orc</groupId>
+          <artifactId>orc-core</artifactId>
+          <version>${orc.flink.version}</version>
+          <scope>compile</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
       <id>flink-bundle-shade-hive3</id>
       <properties>
         <hive.version>3.1.2</hive.version>
