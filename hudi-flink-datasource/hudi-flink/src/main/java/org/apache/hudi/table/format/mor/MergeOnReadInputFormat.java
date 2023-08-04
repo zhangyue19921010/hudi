@@ -209,6 +209,10 @@ public class MergeOnReadInputFormat
       return new SkipMergeIterator(
           getBaseFileIterator(split.getBasePath().get()),
           getLogFileIterator(split));
+    }  else if (split.getMergeType().equals(FlinkOptions.REALTIME_SKIP_COMBINE)) {
+      return new SkipMergeIterator(
+          getBaseFileIterator(split.getBasePath().get()),
+          getUnMergedLogFileIterator(split));
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_PAYLOAD_COMBINE)) {
       return new MergeIterator(
           conf,
