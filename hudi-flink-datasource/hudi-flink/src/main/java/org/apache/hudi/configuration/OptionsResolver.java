@@ -176,6 +176,10 @@ public class OptionsResolver {
     return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
   }
 
+  public static boolean needSavepoint(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.AUTO_SAVEPOINT_ENABLED);
+  }
+
   /**
    * Returns whether the clustering sort is enabled.
    */

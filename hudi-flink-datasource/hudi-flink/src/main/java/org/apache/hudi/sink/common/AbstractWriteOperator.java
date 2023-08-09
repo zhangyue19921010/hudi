@@ -23,6 +23,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.streaming.api.watermark.Watermark;
 
 /**
  * Base class for write operator.
@@ -52,4 +53,11 @@ public abstract class AbstractWriteOperator<I>
   public void handleOperatorEvent(OperatorEvent evt) {
     this.function.handleOperatorEvent(evt);
   }
+
+  @Override
+  public void processWatermark(Watermark mark) throws Exception {
+    super.processWatermark(mark);
+    this.function.handleWatermark(mark);
+  }
+
 }

@@ -65,6 +65,8 @@ import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -340,7 +342,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
   @Override
   public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
-    throw new HoodieNotSupportedException("Savepoint is not supported yet");
+    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, user, comment).execute();
   }
 
   @Override

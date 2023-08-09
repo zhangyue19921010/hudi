@@ -22,6 +22,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
+import org.apache.flink.streaming.api.watermark.Watermark;
 
 /**
  * Base class for write function.
@@ -45,4 +46,8 @@ public abstract class AbstractWriteFunction<I> extends ProcessFunction<I, Object
    * @param event The event
    */
   public abstract void handleOperatorEvent(OperatorEvent event);
+
+  public void handleWatermark(Watermark mark) {
+    // no operation
+  }
 }

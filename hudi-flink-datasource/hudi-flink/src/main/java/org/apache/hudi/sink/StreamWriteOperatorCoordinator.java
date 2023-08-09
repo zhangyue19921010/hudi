@@ -35,6 +35,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
+import org.apache.hudi.sink.event.WatermarkEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
@@ -42,6 +43,7 @@ import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.SavepointUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -126,6 +128,8 @@ public class StreamWriteOperatorCoordinator
    */
   private transient WriteMetadataEvent[] eventBuffer;
 
+  private transient WatermarkEvent[] watermarkBuffer;
+
   /**
    * Task number of the operator.
    */
@@ -135,6 +139,8 @@ public class StreamWriteOperatorCoordinator
    * A single-thread executor to handle all the asynchronous jobs of the coordinator.
    */
   private NonThrownExecutor executor;
+
+  private NonThrownExecutor watermarksHandler;
 
   /**
    * A single-thread executor to handle asynchronous hive sync.
@@ -188,6 +194,9 @@ public class StreamWriteOperatorCoordinator
     this.tableState = TableState.create(conf);
     // start the executor
     this.executor = NonThrownExecutor.builder(LOG)
+        .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+        .waitForTasksFinish(true).build();
+    this.watermarksHandler = NonThrownExecutor.builder(LOG)
         .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
         .waitForTasksFinish(true).build();
     // start the executor if required
@@ -255,6 +264,10 @@ public class StreamWriteOperatorCoordinator
             ClusteringUtil.scheduleClustering(conf, writeClient, committed);
           }
 
+          if (tableState.autoSavepoint && committed && SavepointUtil.needSavepoint()) {
+            writeClient.savepoint(instant, "", "");
+          }
+
           if (committed) {
             // start new instant.
             startInstant();
@@ -272,24 +285,38 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
-    ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
-        "The coordinator can only handle WriteMetaEvent");
-    WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
+    if (operatorEvent instanceof WriteMetadataEvent) {
+      WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
 
-    if (event.isEndInput()) {
-      // handle end input event synchronously
-      // wrap handleEndInputEvent in executeSync to preserve the order of events
-      executor.executeSync(() -> handleEndInputEvent(event), "handle end input event for instant %s", this.instant);
-    } else {
-      executor.execute(
+      if (event.isEndInput()) {
+        // handle end input event synchronously
+        // wrap handleEndInputEvent in executeSync to preserve the order of events
+        executor.executeSync(() -> handleEndInputEvent(event), "handle end input event for instant %s", this.instant);
+      } else {
+        executor.execute(
+            () -> {
+              if (event.isBootstrap()) {
+                handleBootstrapEvent(event);
+              } else {
+                handleWriteMetaEvent(event);
+              }
+            }, "handle write metadata event for instant %s", this.instant
+        );
+      }
+    } else if (operatorEvent instanceof WatermarkEvent && tableState.autoSavepoint) {
+      // deal with WatermarkEvent
+      WatermarkEvent event = (WatermarkEvent) operatorEvent;
+      watermarksHandler.execute(
           () -> {
-            if (event.isBootstrap()) {
-              handleBootstrapEvent(event);
+            if (this.watermarkBuffer[event.getTaskID()] != null) {
+              this.watermarkBuffer[event.getTaskID()].mergeWith(event);
             } else {
-              handleWriteMetaEvent(event);
+              this.watermarkBuffer[event.getTaskID()] = event;
             }
-          }, "handle write metadata event for instant %s", this.instant
+          }, "handle watermark event for instant %s", this.instant
       );
+    } else {
+      throw new HoodieException("Un-support OperatorEvent");
     }
   }
 
@@ -626,6 +653,7 @@ public class StreamWriteOperatorCoordinator
     final boolean syncHive;
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
+    final boolean autoSavepoint;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
@@ -634,6 +662,7 @@ public class StreamWriteOperatorCoordinator
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = OptionsResolver.needsScheduleCompaction(conf);
       this.scheduleClustering = OptionsResolver.needsScheduleClustering(conf);
+      this.autoSavepoint = OptionsResolver.needSavepoint(conf);
       this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);

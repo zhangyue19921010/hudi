@@ -573,6 +573,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true) // default true for MOR write
       .withDescription("Async Compaction, enabled by default for MOR");
 
+  public static final ConfigOption<Boolean> AUTO_SAVEPOINT_ENABLED = ConfigOptions
+      .key("auto.savepoint.enabled")
+      .booleanType()
+      .defaultValue(false) // default true for MOR write
+      .withDescription("");
+
   public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
       .key("compaction.tasks")
       .intType()
