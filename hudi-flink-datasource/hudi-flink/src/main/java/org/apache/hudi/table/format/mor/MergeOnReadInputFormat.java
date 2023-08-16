@@ -211,6 +211,7 @@ public class MergeOnReadInputFormat
           getBaseFileIterator(split.getBasePath().get()),
           getLogFileIterator(split));
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_PAYLOAD_COMBINE)) {
+      // conf contains all the configs including reading runtime env
       return new MergeIterator(
           conf,
           hadoopConf,

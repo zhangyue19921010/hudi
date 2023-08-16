@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -26,6 +27,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -85,8 +89,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
+  private boolean savepointViewEnable = false;
+  private boolean savepointViewFilterByEventTime = false;
+  private String savepointEventTime = null;
 
-  @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                        String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
                                        boolean reverseReader, int bufferSize, String spillableMapBasePath,
@@ -110,6 +116,49 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
 
+    if (forceFullScan) {
+      performScan();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                       String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
+                                       boolean reverseReader, int bufferSize, String spillableMapBasePath,
+                                       Option<InstantRange> instantRange,
+                                       ExternalSpillableMap.DiskMapType diskMapType,
+                                       boolean isBitCaskDiskMapCompressionEnabled,
+                                       boolean withOperationField, boolean forceFullScan,
+                                       Option<String> partitionName,
+                                       InternalSchema internalSchema,
+                                       Option<String> keyFieldOverride,
+                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                       boolean savepointViewEnable,
+                                       boolean savepointViewFilterByEventTime) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger);
+    try {
+      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+      // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
+      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
+          new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
+      this.scannedPrefixes = new HashSet<>();
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
+    }
+    try {
+      this.savepointViewEnable = savepointViewEnable;
+      this.savepointViewFilterByEventTime = savepointViewFilterByEventTime;
+      if (this.savepointViewEnable && this.savepointViewFilterByEventTime) {
+        String savepointInstant = instantRange.get().endInstant;
+        HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointInstant);
+        HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+            hoodieTableMetaClient.getActiveTimeline().getInstantDetails(instant).get());
+        savepointEventTime = metadata.getEventTime();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException when deserialize Hoodie Savepoint Metadata " + instantRange.get().endInstant, e);
+    }
     if (forceFullScan) {
       performScan();
     }
@@ -234,6 +283,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+    if (savepointViewEnable && savepointViewFilterByEventTime) {
+      Long recordEventTime = (Long) newRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
+      if (recordEventTime.compareTo(Long.parseLong(savepointEventTime)) > 0) {
+        return;
+      }
+    }
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
@@ -265,6 +320,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
+    if (savepointViewEnable && savepointViewFilterByEventTime) {
+      Long recordEventTime = (Long) deleteRecord.getOrderingValue();
+      if (recordEventTime.compareTo(Long.parseLong(savepointEventTime)) > 0) {
+        return;
+      }
+    }
     String key = deleteRecord.getRecordKey();
     HoodieRecord oldRecord = records.get(key);
     if (oldRecord != null) {
@@ -334,6 +395,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // Use scanV2 method.
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger;
+    private boolean savepointViewEnable;
+    private boolean savepointViewFilterByEventTime;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -440,6 +503,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    @Override
+    public Builder withSavepointViewEnable(boolean enable, boolean filterByEventTime) {
+      this.savepointViewEnable = enable;
+      this.savepointViewFilterByEventTime = filterByEventTime;
+      return this;
+    }
+
     public Builder withKeyFiledOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
@@ -461,7 +531,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger);
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
+          savepointViewEnable, savepointViewFilterByEventTime);
     }
   }
 }

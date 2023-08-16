@@ -572,6 +572,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                                     String user,
                                                     String comment);
 
+  public abstract HoodieSavepointMetadata savepoint(HoodieEngineContext context,
+                                                    String instantToSavepoint,
+                                                    String user,
+                                                    String comment,
+                                                    String eventTime);
+
   /**
    * Restore the table to the given instant. Note that this is a admin table recovery operation
    * that would cause any running queries that are accessing file slices written after the instant to fail.

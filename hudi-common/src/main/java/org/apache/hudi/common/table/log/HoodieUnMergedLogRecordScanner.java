@@ -107,6 +107,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private LogRecordScannerCallback callback;
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger;
+    private boolean savepointViewEnable = false;
+    private boolean savepointViewFilterByEventTime = false;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -149,6 +151,11 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     public Builder withReverseReader(boolean reverseReader) {
       this.reverseReader = reverseReader;
       return this;
+    }
+
+    @Override
+    public Builder withSavepointViewEnable(boolean enable, boolean filterByEventTime) {
+      throw new UnsupportedOperationException();
     }
 
     public Builder withBufferSize(int bufferSize) {

@@ -391,7 +391,7 @@ public class HoodieTableSource implements
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
-    final String queryType = this.conf.getString(FlinkOptions.QUERY_TYPE);
+    String queryType = this.conf.getString(FlinkOptions.QUERY_TYPE);
     switch (queryType) {
       case FlinkOptions.QUERY_TYPE_SNAPSHOT:
         final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
@@ -412,6 +412,12 @@ public class HoodieTableSource implements
         }
       case FlinkOptions.QUERY_TYPE_READ_OPTIMIZED:
         return baseFileOnlyInputFormat();
+      case FlinkOptions.QUERY_TYPE_SAVEPOINT:
+        if (metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().countInstants() == 0) {
+          LOG.info("There is no completed savepoint commit in hudi table timeline yet, fall back to common incremental query");
+          this.conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+          queryType = FlinkOptions.QUERY_TYPE_INCREMENTAL;
+        }
       case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
             .conf(conf)
@@ -420,7 +426,7 @@ public class HoodieTableSource implements
             .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
             .requiredPartitions(getRequiredPartitionPaths()).build();
         final boolean cdcEnabled = this.conf.getBoolean(FlinkOptions.CDC_ENABLED);
-        final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf, cdcEnabled);
+        final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf, cdcEnabled, queryType);
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
           LOG.warn("No input splits generate for incremental read, returns empty collection instead");

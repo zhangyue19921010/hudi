@@ -286,6 +286,11 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment, String eventTime) {
+    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, user, comment).execute();
+  }
+
+  @Override
   public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     return new CopyOnWriteRestoreActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }

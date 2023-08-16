@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -47,7 +48,7 @@ public abstract class AbstractWriteFunction<I> extends ProcessFunction<I, Object
    */
   public abstract void handleOperatorEvent(OperatorEvent event);
 
-  public void handleWatermark(Watermark mark) {
+  public void handleWatermark(Watermark mark) throws Exception {
     // no operation
   }
 }

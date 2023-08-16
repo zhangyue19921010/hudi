@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -55,6 +56,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -100,25 +102,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     this.fgIdToPendingLogCompactionOperations = fileSystemView.getPendingLogCompactionOperations()
         .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-  }
-
-  /**
-   * Get the list of data file names savepointed.
-   */
-  public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!hoodieTable.getSavepointTimestamps().contains(savepointTime)) {
-      throw new HoodieSavepointException(
-          "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
-    }
-    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
-    HoodieSavepointMetadata metadata;
-    try {
-      metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-          hoodieTable.getActiveTimeline().getInstantDetails(instant).get());
-    } catch (IOException e) {
-      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
-    }
-    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
   }
 
   /**
@@ -221,14 +204,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
         + " file versions. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
-    // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
-        .flatMap(this::getSavepointedDataFiles)
-        .collect(Collectors.toList());
+    // Collect all the files savepointed by all the savepoints
+    SavepointFilesView sfv = buildSavepointFileViews();
 
     // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
     // In other words, the file versions only apply to the active file groups.
-    deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty()));
+    deletePaths.addAll(getReplacedFilesEligibleToClean(sfv, partitionPath, Option.empty()));
     boolean toDeletePartition = false;
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     for (HoodieFileGroup fileGroup : fileGroups) {
@@ -251,8 +232,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
-        if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
+        if (sfv.isFileSliceExistInSavepointedFiles(nextSlice)) {
           // do not clean up a savepoint data file
           continue;
         }
@@ -264,6 +244,29 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       toDeletePartition = true;
     }
     return Pair.of(toDeletePartition, deletePaths);
+  }
+
+  private SavepointFilesView buildSavepointFileViews() {
+    SavepointFilesView sfv = new SavepointFilesView();
+    hoodieTable.getSavepointTimestamps().forEach(savepointTime -> {
+      if (!hoodieTable.getSavepointTimestamps().contains(savepointTime)) {
+        throw new HoodieSavepointException(
+            "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
+      }
+      HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+      HoodieSavepointMetadata metadata;
+      try {
+        metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+            hoodieTable.getActiveTimeline().getInstantDetails(instant).get());
+      } catch (IOException e) {
+        throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
+      }
+      metadata.getPartitionMetadata().values().forEach(meta -> {
+        sfv.addDatafiles(meta.getSavepointDataFile());
+        sfv.addLonelyDeltaFiles(meta.getSavepointLonelyDeltaFile());
+      });
+    });
+    return sfv;
   }
 
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath) {
@@ -291,10 +294,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
-    // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
-        .flatMap(this::getSavepointedDataFiles)
-        .collect(Collectors.toList());
+    // Collect all the files savepointed by all the savepoints
+    SavepointFilesView sfv = buildSavepointFileViews();
 
     // determine if we have enough commits, to start cleaning.
     boolean toDeletePartition = false;
@@ -302,7 +303,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       Option<HoodieInstant> earliestCommitToRetainOption = getEarliestCommitToRetain();
       HoodieInstant earliestCommitToRetain = earliestCommitToRetainOption.get();
       // all replaced file groups before earliestCommitToRetain are eligible to clean
-      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetainOption));
+      deletePaths.addAll(getReplacedFilesEligibleToClean(sfv, partitionPath, earliestCommitToRetainOption));
       // add active files
       List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
@@ -321,7 +322,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         for (FileSlice aSlice : fileSliceList) {
           Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
-          if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
+          if (sfv.isFileSliceExistInSavepointedFiles(aSlice)) {
             // do not clean up a savepoint data file
             continue;
           }
@@ -382,7 +383,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     return getFilesToCleanKeepingLatestCommits(partitionPath, 0, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
   }
 
-  private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
+  private List<CleanFileInfo> getReplacedFilesEligibleToClean(SavepointFilesView sfv, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
     final Stream<HoodieFileGroup> replacedGroups;
     if (earliestCommitToRetain.isPresent()) {
       replacedGroups = fileSystemView.getReplacedFileGroupsBefore(earliestCommitToRetain.get().getTimestamp(), partitionPath);
@@ -391,7 +392,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
+        .filter(slice -> !slice.getBaseFile().isPresent() || !sfv.isFileSliceExistInSavepointedFiles(slice))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
         .collect(Collectors.toList());
   }
@@ -544,5 +545,37 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private boolean isFileGroupInPendingMajorOrMinorCompaction(HoodieFileGroup fg) {
     return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId())
         || fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
+  }
+
+  static class SavepointFilesView {
+
+    private HashSet<String> datafiles;
+    private HashSet<String> lonelyDeltaFiles;
+
+    public SavepointFilesView() {
+      this.datafiles = new HashSet<>();
+      this.lonelyDeltaFiles = new HashSet<>();
+    }
+    public SavepointFilesView(List<String> datafiles, List<String> lonelyDeltaFiles) {
+      this.datafiles = new HashSet<>(datafiles);
+      this.lonelyDeltaFiles = new HashSet<>(lonelyDeltaFiles);
+    }
+
+    public boolean isFileSliceExistInSavepointedFiles(FileSlice fileSlice) {
+      return (fileSlice.getBaseFile().isPresent() && datafiles.contains(fileSlice.getBaseFile().get().getFileName())) // baseFileInSavepoint
+          || (!lonelyDeltaFiles.isEmpty() && fileSlice.getLogFiles().map(HoodieLogFile::getFileName).anyMatch(log -> lonelyDeltaFiles.contains(log))); // logfileInSavepoint
+    }
+
+    public void addDatafiles(List<String> datafiles) {
+      if (datafiles != null) {
+        this.datafiles.addAll(datafiles);
+      }
+    }
+
+    public void addLonelyDeltaFiles(List<String> lonelyDeltaFiles) {
+      if (lonelyDeltaFiles != null) {
+        this.lonelyDeltaFiles.addAll(lonelyDeltaFiles);
+      }
+    }
   }
 }

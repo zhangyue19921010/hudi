@@ -616,6 +616,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     table.savepoint(context, instantTime, user, comment);
   }
 
+  public void savepoint(String instantTime, String user, String comment, String eventTime) {
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    table.savepoint(context, instantTime, user, comment, eventTime);
+  }
+
   /**
    * Delete a savepoint that was created. Once the savepoint is deleted, the commit can be rolledback and cleaner may
    * clean up data files.

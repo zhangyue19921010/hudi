@@ -31,22 +31,15 @@ import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
-import org.apache.hudi.sink.event.WatermarkEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ValueState;
-import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeHint;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,23 +129,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     initBuffer();
     initWriteFunction();
     initMergeClass();
-    ValueStateDescriptor<Long> descriptor =
-        new ValueStateDescriptor<>(
-            "watermark", // the state name
-            TypeInformation.of(new TypeHint<Long>() {}), -1L);
-    this.watermark = getRuntimeContext().getState(descriptor);
-  }
-
-  @Override
-  public void initializeState(FunctionInitializationContext context) throws Exception {
-
-    ValidationUtils.checkState(this.watermark == null,
-        "The " + getClass().getSimpleName() + " has already been initialized.");
-    ValueStateDescriptor<Long> descriptor =
-        new ValueStateDescriptor<>(
-            "watermark", // the state name
-            TypeInformation.of(new TypeHint<Long>() {}));
-    this.watermark = context.getKeyedStateStore().getState(descriptor);
   }
 
   @Override
@@ -161,33 +137,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushRemaining(false);
-
-    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED)) {
-      try {
-        final WatermarkEvent event = WatermarkEvent.builder()
-            .taskID(taskID)
-            .watermarkTime((watermark.value()))
-            .build();
-
-        this.eventGateway.sendEventToCoordinator(event);
-      } catch (IOException e) {
-        throw new HoodieIOException("", e);
-      }
-    }
   }
 
   @Override
   public void processElement(I value, ProcessFunction<I, Object>.Context ctx, Collector<Object> out) throws Exception {
     bufferRecord((HoodieRecord<?>) value);
-  }
-
-  @Override
-  public void handleWatermark(Watermark mark) {
-    try {
-      watermark.update(mark.getTimestamp());
-    } catch (IOException e) {
-      throw new HoodieIOException("", e);
-    }
   }
 
   @Override

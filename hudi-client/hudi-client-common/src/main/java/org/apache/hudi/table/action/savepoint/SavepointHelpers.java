@@ -33,8 +33,14 @@ public class SavepointHelpers {
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
-    boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
-    if (!isSavepointPresent) {
+    boolean isSavepointPresentInCompleted = table.getCompletedSavepointTimeline().containsInstant(savePoint);
+    if (!isSavepointPresentInCompleted) {
+      HoodieTimeline pending = table.getMetaClient().getActiveTimeline().getSavePointTimeline().filterInflightsAndRequested();
+      if (pending.containsInstant(savepointTime)) {
+        table.getActiveTimeline().deleteInflight(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, savepointTime));
+        LOG.info("Inflight Savepoint " + savepointTime + " deleted");
+        return;
+      }
       LOG.warn("No savepoint present " + savepointTime);
       return;
     }

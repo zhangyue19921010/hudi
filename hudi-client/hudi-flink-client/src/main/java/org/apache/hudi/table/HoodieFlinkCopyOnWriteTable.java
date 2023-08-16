@@ -346,6 +346,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment, String eventTime) {
+    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, user, comment, eventTime).execute();
+  }
+
+  @Override
   public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     throw new HoodieNotSupportedException("Restore is not supported yet");
   }

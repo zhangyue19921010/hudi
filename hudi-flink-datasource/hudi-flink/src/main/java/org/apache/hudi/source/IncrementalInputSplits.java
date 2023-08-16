@@ -65,6 +65,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -124,6 +125,13 @@ public class IncrementalInputSplits implements Serializable {
     return new Builder();
   }
 
+
+  public Result inputSplits(
+      HoodieTableMetaClient metaClient,
+      org.apache.hadoop.conf.Configuration hadoopConf,
+      boolean cdcEnabled) {
+    return inputSplits(metaClient, hadoopConf, cdcEnabled, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+  }
   /**
    * Returns the incremental input splits.
    *
@@ -136,15 +144,23 @@ public class IncrementalInputSplits implements Serializable {
   public Result inputSplits(
       HoodieTableMetaClient metaClient,
       org.apache.hadoop.conf.Configuration hadoopConf,
-      boolean cdcEnabled) {
+      boolean cdcEnabled,
+      String queryType) {
     HoodieTimeline commitTimeline = getReadTimeline(metaClient);
     if (commitTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return Result.EMPTY;
     }
-
-    final String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
-    final String endCommit = this.conf.getString(FlinkOptions.READ_END_COMMIT);
+    final String startCommit;
+    final String endCommit;
+    if (queryType.equalsIgnoreCase(FlinkOptions.QUERY_TYPE_SAVEPOINT)) {
+      startCommit = "earliest";
+      // end commit is the savepoint instant.
+      endCommit = setUpSavepointEndCommit(metaClient);
+    } else {
+      startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
+      endCommit = this.conf.getString(FlinkOptions.READ_END_COMMIT);
+    }
     final boolean startFromEarliest = FlinkOptions.START_COMMIT_EARLIEST.equalsIgnoreCase(startCommit);
     final boolean startOutOfRange = startCommit != null && commitTimeline.isBeforeTimelineStarts(startCommit);
     final boolean endOutOfRange = endCommit != null && commitTimeline.isBeforeTimelineStarts(endCommit);
@@ -239,6 +255,16 @@ public class IncrementalInputSplits implements Serializable {
         fileStatuses, readPartitions, endInstant, instantRange, false);
 
     return Result.instance(inputSplits, endInstant);
+  }
+
+  private String setUpSavepointEndCommit(HoodieTableMetaClient metaClient) {
+    String finalOffset = this.conf.getString(FlinkOptions.SAVE_POINT_READ_DATE);
+    if (finalOffset == null) {
+      Option<HoodieInstant> latestSavepointCommit = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().lastInstant();
+      finalOffset = latestSavepointCommit.isPresent() ? latestSavepointCommit.get().getTimestamp() : null;
+    }
+    LOG.info("Savepoint view read up to " + finalOffset);
+    return finalOffset;
   }
 
   /**

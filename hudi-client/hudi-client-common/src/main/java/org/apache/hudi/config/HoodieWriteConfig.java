@@ -76,6 +76,7 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.savepoint.SavepointTriggerStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -1488,6 +1489,9 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public CompactionStrategy getCompactionStrategy() {
     return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
+  }
+  public SavepointTriggerStrategy getSavepointStrategy() {
+    return SavepointTriggerStrategy.valueOf(getStringOrDefault(HoodieSavepointConfig.SAVEPOINT_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT));
   }
 
   public Long getTargetIOPerCompactionInMB() {

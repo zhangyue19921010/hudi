@@ -30,6 +30,8 @@ public class WatermarkEvent implements OperatorEvent {
   private int taskID;
   private Long watermarkTime;
 
+  private String instantTime;
+
   // default constructor for efficient serialization
   public WatermarkEvent() {
   }
@@ -39,9 +41,11 @@ public class WatermarkEvent implements OperatorEvent {
    */
   private WatermarkEvent(
       int taskID,
-      Long watermarkTime) {
+      Long watermarkTime,
+      String instantTime) {
     this.taskID = taskID;
     this.watermarkTime = watermarkTime;
+    this.instantTime = instantTime;
   }
 
   /**
@@ -67,14 +71,23 @@ public class WatermarkEvent implements OperatorEvent {
     this.watermarkTime = watermarkTime;
   }
 
+  public String getInstantTime() {
+    return instantTime;
+  }
+
+  public void setInstantTime(String instantTime) {
+    this.instantTime = instantTime;
+  }
+
   /**
    * Merges this event with given {@link WatermarkEvent} {@code other}.
    *
    * @param other The event to be merged
    */
-  public void mergeWith(WatermarkEvent other) {
+  public WatermarkEvent mergeWith(WatermarkEvent other) {
     ValidationUtils.checkArgument(this.taskID == other.taskID);
     this.watermarkTime = other.watermarkTime;
+    return this;
   }
 
   @Override
@@ -82,6 +95,7 @@ public class WatermarkEvent implements OperatorEvent {
     return "WriteMetadataEvent{"
         + ", taskID=" + taskID
         + ", watermarkTime='" + watermarkTime
+        + ", instant='" + instantTime
         + '}';
   }
   // -------------------------------------------------------------------------
@@ -94,11 +108,13 @@ public class WatermarkEvent implements OperatorEvent {
   public static class Builder {
     private Integer taskID;
     private Long watermarkTime;
+    private String instant;
 
     public WatermarkEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(watermarkTime);
-      return new WatermarkEvent(taskID, watermarkTime);
+      // instant could be null for now
+      return new WatermarkEvent(taskID, watermarkTime, instant);
     }
 
     public Builder taskID(int taskID) {
@@ -108,6 +124,11 @@ public class WatermarkEvent implements OperatorEvent {
 
     public Builder watermarkTime(Long watermarkTime) {
       this.watermarkTime = watermarkTime;
+      return this;
+    }
+
+    public Builder instant(String currentInstant) {
+      this.instant = currentInstant;
       return this;
     }
   }

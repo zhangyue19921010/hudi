@@ -165,6 +165,18 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys(HoodieTableConfig.CDC_ENABLED.key())
       .withDescription("When enable, persist the change data if necessary, and can be queried as a CDC query mode");
 
+  public static final ConfigOption<Boolean> SAVEPOINT_FILTER_BY_ENENT_TIME = ConfigOptions
+      .key("savepoint.read.filterby.eventtime")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("");
+
+  public static final ConfigOption<String> SAVE_POINT_READ_DATE = ConfigOptions
+      .key("savepoint.read.date")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("");
+
   public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
       .key("cdc.supplemental.logging.mode")
       .stringType()
@@ -249,6 +261,7 @@ public class FlinkOptions extends HoodieConfig {
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
+  public static final String QUERY_TYPE_SAVEPOINT = "savepoint";
   public static final String QUERY_TYPE_INCREMENTAL = "incremental";
   public static final ConfigOption<String> QUERY_TYPE = ConfigOptions
       .key("hoodie.datasource.query.type")
@@ -574,9 +587,20 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Async Compaction, enabled by default for MOR");
 
   public static final ConfigOption<Boolean> AUTO_SAVEPOINT_ENABLED = ConfigOptions
-      .key("auto.savepoint.enabled")
+      .key("savepoint.write.enabled")
       .booleanType()
-      .defaultValue(false) // default true for MOR write
+      .defaultValue(false)
+      .withDescription("");
+  public static final ConfigOption<Boolean> SAVEPOINT_RECORD_EVENT_TIME = ConfigOptions
+      .key("savepoint.write.record.eventtime")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("");
+
+  public static final ConfigOption<String> SAVEPOINT_WRITE_TIME_EXPRESSION = ConfigOptions
+      .key("savepoint.write.time.expression")
+      .stringType()
+      .defaultValue("")
       .withDescription("");
 
   public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions

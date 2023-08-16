@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
+import org.apache.hudi.sink.event.WatermarkEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.TimeWait;
@@ -42,10 +43,12 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -127,6 +130,8 @@ public abstract class AbstractStreamWriteFunction<I>
    */
   private transient boolean inputEnded;
 
+  private transient ListState<WatermarkEvent> watermark;
+
   /**
    * Constructs a StreamWriteFunctionBase.
    *
@@ -147,16 +152,32 @@ public abstract class AbstractStreamWriteFunction<I>
             "write-metadata-state",
             TypeInformation.of(WriteMetadataEvent.class)
         ));
-
+    this.watermark = context.getOperatorStateStore().getListState(new ListStateDescriptor<>(
+        "watermark",
+        TypeInformation.of(WatermarkEvent.class)));
     this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), this.metaClient.getBasePath());
     this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();
+      uploadWatermarkEvent();
     } else {
       sendBootstrapEvent();
     }
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+
+  }
+
+  @Override
+  public void handleWatermark(Watermark mark) throws Exception {
+    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED)) {
+      final WatermarkEvent event = WatermarkEvent.builder()
+          .taskID(taskID)
+          .instant(currentInstant)
+          .watermarkTime(mark.getTimestamp())
+          .build();
+      watermark.update(Collections.singletonList(event));
+    }
   }
 
   @Override
@@ -165,8 +186,21 @@ public abstract class AbstractStreamWriteFunction<I>
       return;
     }
     snapshotState();
+    uploadWatermarkEvent();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
+  }
+
+  private void uploadWatermarkEvent() throws Exception {
+    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED)) {
+      ValidationUtils.checkArgument(watermark.get() != null && watermark.get().iterator().hasNext(),
+          "WHF? Watermark value is null? please check the water mark related logic.");
+      WatermarkEvent event = watermark.get().iterator().next();
+      if (event.getInstantTime() == null) {
+        event.setInstantTime(currentInstant);
+      }
+      this.eventGateway.sendEventToCoordinator(event);
+    }
   }
 
   public abstract void snapshotState();

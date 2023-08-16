@@ -37,6 +37,7 @@ import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
@@ -96,14 +97,15 @@ public class TimelineMetadataUtils {
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
-                                                                 Map<String, List<String>> latestFiles) {
+                                                                 Map<String, Pair<List<String>,List<String>>> latestFiles,
+                                                                 String eventTime) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
-    for (Map.Entry<String, List<String>> stat : latestFiles.entrySet()) {
-      HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());
+    for (Map.Entry<String, Pair<List<String>,List<String>>> stat : latestFiles.entrySet()) {
+      HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue().getLeft(), stat.getValue().getRight());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
-        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION, eventTime);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {

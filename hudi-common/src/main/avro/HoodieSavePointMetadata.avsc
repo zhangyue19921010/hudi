@@ -28,7 +28,8 @@
              "name": "HoodieSavepointPartitionMetadata",
              "fields": [
                  {"name": "partitionPath", "type": "string"},
-                 {"name": "savepointDataFile", "type": {"type": "array", "items": "string"}}
+                 {"name": "savepointDataFile", "type": {"type": "array", "items": "string"}, "default": []},
+               {"name": "savepointLonelyDeltaFile", "type": {"type": "array", "items": "string"}, "default": []} // log files had no related base file
              ]
           }
           }
@@ -36,7 +37,12 @@
      {
         "name":"version",
         "type":["int", "null"],
-        "default": 1
+        "default": 2
+     },
+     {
+       "name":"eventTime",
+       "type":["null", "string"],
+       "default": null
      }
  ]
 }

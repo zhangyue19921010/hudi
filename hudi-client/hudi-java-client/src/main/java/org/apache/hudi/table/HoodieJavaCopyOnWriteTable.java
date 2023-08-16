@@ -250,6 +250,16 @@ public class HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context,
+                                           String instantToSavepoint,
+                                           String user,
+                                           String comment,
+                                           String eventTime) {
+    return new SavepointActionExecutor(
+        context, config, this, instantToSavepoint, user, comment).execute();
+  }
+
+  @Override
   public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     return new RestorePlanActionExecutor(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
