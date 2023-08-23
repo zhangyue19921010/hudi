@@ -76,7 +76,6 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-import org.apache.hudi.table.action.savepoint.SavepointTriggerStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -656,6 +655,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
+
+  public static final ConfigProperty<Boolean> RECORD_EVENT_TIME_IN_COMMIT = ConfigProperty
+      .key("hoodie.write.record.eventtime")
+      .defaultValue(false)
+      .sinceVersion("")
+      .withDocumentation("");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1391,6 +1396,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP);
   }
 
+  public int getSavepointInstantToKeep() {
+    return getInt(HoodieArchivalConfig.SAVEPOINT_COMMITS_TO_KEEP);
+  }
+
   public int getArchiveMergeFilesBatchSize() {
     return getInt(HoodieArchivalConfig.ARCHIVE_MERGE_FILES_BATCH_SIZE);
   }
@@ -1490,10 +1499,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   public CompactionStrategy getCompactionStrategy() {
     return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
   }
-  public SavepointTriggerStrategy getSavepointStrategy() {
-    return SavepointTriggerStrategy.valueOf(getStringOrDefault(HoodieSavepointConfig.SAVEPOINT_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT));
-  }
-
   public Long getTargetIOPerCompactionInMB() {
     return getLong(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB);
   }
@@ -2338,6 +2343,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT);
   }
 
+  public boolean needRecordEventTimeInCommit() {
+    return getBoolean(RECORD_EVENT_TIME_IN_COMMIT);
+  }
+
   // misc configs
   public Boolean doSkipDefaultPartitionValidation() {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
@@ -2908,6 +2917,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEarlyConflictDetectionCheckCommitConflict(boolean enable) {
       writeConfig.setValue(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withRecordEventTimeInCommitEnable(boolean enable) {
+      writeConfig.setValue(RECORD_EVENT_TIME_IN_COMMIT, String.valueOf(enable));
       return this;
     }
 

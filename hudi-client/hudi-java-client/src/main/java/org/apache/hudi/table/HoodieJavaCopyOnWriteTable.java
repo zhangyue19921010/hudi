@@ -254,7 +254,7 @@ public class HoodieJavaCopyOnWriteTable<T>
                                            String instantToSavepoint,
                                            String user,
                                            String comment,
-                                           String eventTime) {
+                                           String recordMinEventTime, String savepointDateBoundary) {
     return new SavepointActionExecutor(
         context, config, this, instantToSavepoint, user, comment).execute();
   }

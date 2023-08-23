@@ -346,8 +346,9 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
-  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment, String eventTime) {
-    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, user, comment, eventTime).execute();
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment,
+                                           String recordMinEventTime, String savepointDateBoundary) {
+    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, user, comment, recordMinEventTime, savepointDateBoundary).execute();
   }
 
   @Override

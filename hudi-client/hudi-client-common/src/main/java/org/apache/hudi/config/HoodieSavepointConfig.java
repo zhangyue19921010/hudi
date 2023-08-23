@@ -22,17 +22,13 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.table.action.savepoint.SavepointTriggerStrategy;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 /**
  * Archival related config.
@@ -43,14 +39,33 @@ import java.util.stream.Collectors;
     description = "Configurations that control savepoint.")
 public class HoodieSavepointConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
+  public static final ConfigProperty<String> AUTO_SAVEPOINT = ConfigProperty
       .key("hoodie.savepoint.automatic")
       .defaultValue("false")
       .withDocumentation("");
 
-  public static final ConfigProperty<String> SAVEPOINT_TRIGGER_STRATEGY = ConfigProperty
-      .key("hoodie.savepoint.trigger.strategy")
-      .defaultValue(SavepointTriggerStrategy.NUM_AND_TIME.name())
+  // write related config ------------------------------------------------------------------------------------------------------------
+  public static final ConfigProperty<Boolean> SAVEPOINT_RECORD_EVENT_TIME = ConfigProperty
+      .key("hoodie.savepoint.write.record.eventtime")
+      .defaultValue(true)
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> SAVEPOINT_WRITE_TIME_EXPRESSION = ConfigProperty
+      .key("hoodie.savepoint.write.time.expression")
+      .defaultValue("")
+      .withDocumentation("");
+
+
+
+  // read related config ------------------------------------------------------------------------------------------------------------
+  public static final ConfigProperty<Boolean> SAVEPOINT_FILTER_BY_ENENT_TIME = ConfigProperty
+      .key("hoodie.savepoint.read.filterby.eventtime")
+      .defaultValue(false)
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> SAVE_POINT_READ_DATE = ConfigProperty
+      .key("hoodie.savepoint.read.date")
+      .noDefaultValue()
       .withDocumentation("");
 
 

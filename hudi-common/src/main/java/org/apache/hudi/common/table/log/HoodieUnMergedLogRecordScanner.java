@@ -154,7 +154,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
-    public Builder withSavepointViewEnable(boolean enable, boolean filterByEventTime) {
+    public Builder withSavepointView(boolean enable, boolean filterByEventTime) {
       throw new UnsupportedOperationException();
     }
 

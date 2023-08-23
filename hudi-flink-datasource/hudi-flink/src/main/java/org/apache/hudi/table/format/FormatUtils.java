@@ -169,8 +169,8 @@ public class FormatUtils {
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
         .withRecordMerger(writeConfig.getRecordMerger())
-        .withSavepointViewEnable(flinkConf.getString(FlinkOptions.QUERY_TYPE).equalsIgnoreCase(FlinkOptions.QUERY_TYPE_SAVEPOINT),
-            flinkConf.getBoolean(FlinkOptions.SAVEPOINT_FILTER_BY_ENENT_TIME))
+        .withSavepointView(flinkConf.getString(FlinkOptions.QUERY_TYPE).equalsIgnoreCase(FlinkOptions.QUERY_TYPE_SAVEPOINT),
+            flinkConf.getBoolean(FlinkOptions.SAVEPOINT_FILTER_BY_EVENT_TIME))
         .build();
   }
 

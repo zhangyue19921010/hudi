@@ -65,7 +65,7 @@ import java.util.stream.Collectors;
  */
 public class TimelineMetadataUtils {
 
-  private static final Integer DEFAULT_VERSION = 1;
+  private static final Integer DEFAULT_VERSION = 2;
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
                                                              long durationInMs,
@@ -98,14 +98,14 @@ public class TimelineMetadataUtils {
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
                                                                  Map<String, Pair<List<String>,List<String>>> latestFiles,
-                                                                 String eventTime) {
+                                                                 String recordMinEventTime, String savepointDateBoundary) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     for (Map.Entry<String, Pair<List<String>,List<String>>> stat : latestFiles.entrySet()) {
       HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue().getLeft(), stat.getValue().getRight());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
-        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION, eventTime);
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION, recordMinEventTime, savepointDateBoundary);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {

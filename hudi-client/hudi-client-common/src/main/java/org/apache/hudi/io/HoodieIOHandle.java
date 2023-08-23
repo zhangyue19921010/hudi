@@ -18,12 +18,17 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+
+import java.util.Properties;
 
 public abstract class HoodieIOHandle<T, I, K, O> {
 
@@ -31,13 +36,39 @@ public abstract class HoodieIOHandle<T, I, K, O> {
   protected final HoodieWriteConfig config;
   protected final FileSystem fs;
   protected final HoodieTable<T, I, K, O> hoodieTable;
+  // maxEventTime for processed records
+  protected long eventTimeMax = 0;
+  // minEventTime for processed records
+  protected long eventTimeMin = 0;
+  protected boolean recordEventTime;
 
   HoodieIOHandle(HoodieWriteConfig config, Option<String> instantTime, HoodieTable<T, I, K, O> hoodieTable) {
     this.instantTime = instantTime.orElse(StringUtils.EMPTY_STRING);
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fs = getFileSystem();
+    this.recordEventTime = config.needRecordEventTimeInCommit();
   }
 
   public abstract FileSystem getFileSystem();
+
+  public void resetEventTime() {
+    this.eventTimeMin = 0;
+    this.eventTimeMax = 0;
+  }
+
+  public void putEventTimeStats(HoodieWriteStat stat) {
+    if (this.recordEventTime) {
+      stat.setMaxEventTime(this.eventTimeMax);
+      stat.setMinEventTime(this.eventTimeMin);
+    }
+  }
+
+  public void updateEventTime(HoodieRecord record, Schema writeSchema, Properties props) {
+    if (this.recordEventTime) {
+      long eventTime = ((Number) record.getOrderingValue(writeSchema, props)).longValue();
+      this.eventTimeMax = Math.max(eventTimeMax, eventTime);
+      this.eventTimeMin = Math.max(eventTimeMin, eventTime);
+    }
+  }
 }

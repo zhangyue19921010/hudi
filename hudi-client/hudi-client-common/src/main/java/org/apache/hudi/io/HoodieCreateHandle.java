@@ -154,6 +154,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         recordsWritten++;
         insertRecordsWritten++;
+        updateEventTime(record, writeSchema, config.getProps());
       } else {
         recordsDeleted++;
       }
@@ -241,5 +242,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
+    putEventTimeStats(stat);
   }
 }

@@ -385,6 +385,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     } else {
       fileWriter.writeWithMetadata(key, populatedRecord, writeSchemaWithMetaFields);
     }
+    updateEventTime(record, writeSchema, prop);
   }
 
   protected void writeIncomingRecords() throws IOException {
@@ -429,6 +430,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
+      putEventTimeStats(stat);
 
       performMergeDataValidationCheck(writeStatus);
 

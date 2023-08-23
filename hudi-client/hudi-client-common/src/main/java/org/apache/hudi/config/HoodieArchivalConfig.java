@@ -78,6 +78,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("Similar to " + MAX_COMMITS_TO_KEEP.key() + ", but controls the minimum number of"
           + " instants to retain in the active timeline.");
 
+  public static final ConfigProperty<String> SAVEPOINT_COMMITS_TO_KEEP = ConfigProperty
+      .key("hoodie.keep.savepoint.commits")
+      .defaultValue("30")
+      .withDocumentation("");
+
   public static final ConfigProperty<String> COMMITS_ARCHIVAL_BATCH_SIZE = ConfigProperty
       .key("hoodie.commits.archival.batch")
       .defaultValue(String.valueOf(10))

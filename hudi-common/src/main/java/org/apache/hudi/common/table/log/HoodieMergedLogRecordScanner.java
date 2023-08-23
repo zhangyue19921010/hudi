@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 
@@ -91,7 +92,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long totalTimeTakenToReadAndMergeBlocks;
   private boolean savepointViewEnable = false;
   private boolean savepointViewFilterByEventTime = false;
-  private String savepointEventTime = null;
+  private long savepointDateBoundary;
 
   private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                        String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
@@ -146,21 +147,25 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
-    try {
-      this.savepointViewEnable = savepointViewEnable;
-      this.savepointViewFilterByEventTime = savepointViewFilterByEventTime;
-      if (this.savepointViewEnable && this.savepointViewFilterByEventTime) {
-        String savepointInstant = instantRange.get().endInstant;
-        HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointInstant);
-        HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-            hoodieTableMetaClient.getActiveTimeline().getInstantDetails(instant).get());
-        savepointEventTime = metadata.getEventTime();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException when deserialize Hoodie Savepoint Metadata " + instantRange.get().endInstant, e);
-    }
+    setupSavepointView(savepointViewEnable, savepointViewFilterByEventTime, instantRange);
     if (forceFullScan) {
       performScan();
+    }
+  }
+
+  private void setupSavepointView(boolean savepointViewEnable, boolean savepointViewFilterByEventTime, Option<InstantRange> instantRange) {
+    HoodieTimeline spTimeline = hoodieTableMetaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+    if (savepointViewEnable && savepointViewFilterByEventTime &&
+        instantRange.isPresent() && spTimeline.containsInstant(instantRange.get().endInstant)) {
+      this.savepointViewEnable = true;
+      this.savepointViewFilterByEventTime = true;
+      try {
+        HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+            spTimeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantRange.get().endInstant)).get());
+        this.savepointDateBoundary = Long.parseLong(metadata.getSavepointDateBoundary());
+      } catch (Exception e) {
+        throw new HoodieException("", e);
+      }
     }
   }
 
@@ -284,8 +289,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     if (savepointViewEnable && savepointViewFilterByEventTime) {
-      Long recordEventTime = (Long) newRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
-      if (recordEventTime.compareTo(Long.parseLong(savepointEventTime)) > 0) {
+      Long recordEventTime = ((Number) newRecord.
+          getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps())).longValue();
+      if (recordEventTime.compareTo(savepointDateBoundary) > 0) {
         return;
       }
     }
@@ -321,8 +327,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     if (savepointViewEnable && savepointViewFilterByEventTime) {
-      Long recordEventTime = (Long) deleteRecord.getOrderingValue();
-      if (recordEventTime.compareTo(Long.parseLong(savepointEventTime)) > 0) {
+      Long recordEventTime = ((Number) deleteRecord.getOrderingValue()).longValue();
+      if (recordEventTime.compareTo(savepointDateBoundary) > 0) {
         return;
       }
     }
@@ -504,7 +510,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
-    public Builder withSavepointViewEnable(boolean enable, boolean filterByEventTime) {
+    public Builder withSavepointView(boolean enable, boolean filterByEventTime) {
       this.savepointViewEnable = enable;
       this.savepointViewFilterByEventTime = filterByEventTime;
       return this;

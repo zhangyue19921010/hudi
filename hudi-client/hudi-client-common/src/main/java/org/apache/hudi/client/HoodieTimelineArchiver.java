@@ -61,6 +61,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -102,6 +103,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private Writer writer;
   private final int maxInstantsToKeep;
   private final int minInstantsToKeep;
+  private final int savepointInstantsToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
   private final TransactionManager txnManager;
@@ -113,6 +115,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
+    this.savepointInstantsToKeep = config.getSavepointInstantToKeep();
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
@@ -175,6 +178,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
         success = deleteArchivedInstants(instantsToArchive, context);
+        deleteOutOfDateSavepoints();
       } else {
         LOG.info("No Instants to archive");
       }
@@ -189,6 +193,19 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         txnManager.endTransaction(Option.empty());
       }
     }
+  }
+
+  private void deleteOutOfDateSavepoints() {
+    HoodieTimeline completedSavepointTimeline = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+    if (completedSavepointTimeline.countInstants() <= savepointInstantsToKeep) {
+      return;
+    }
+    List<HoodieInstant> savepointToDelete = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().getInstantsAsStream()
+        .limit(completedSavepointTimeline.countInstants() - savepointInstantsToKeep).collect(Collectors.toList());
+    LOG.info("Deleting out of date savepoint " + savepointToDelete);
+    savepointToDelete.forEach(instant -> {
+      SavepointHelpers.deleteSavepoint(table, instant.getTimestamp());
+    });
   }
 
   public boolean shouldMergeSmallArchiveFiles() {

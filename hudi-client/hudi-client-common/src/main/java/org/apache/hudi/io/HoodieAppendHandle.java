@@ -59,6 +59,7 @@ import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -327,6 +328,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     updatedRecordsWritten = 0;
     insertRecordsWritten = 0;
     recordsDeleted = 0;
+    resetEventTime();
   }
 
   private void updateWriteCounts(HoodieDeltaWriteStat stat, AppendResult result) {
@@ -419,7 +421,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       stat.putRecordsStats(columnRangesMetadataMap);
     }
-
+    putEventTimeStats(stat);
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;
     LOG.info(String.format("AppendHandle for partitionPath %s filePath %s, took %d ms.", partitionPath,
@@ -565,6 +567,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
     // fetch the ordering val first in case the record was deflated.
     final Comparable<?> orderingVal = record.getOrderingValue(writeSchema, recordProperties);
+    updateEventTime(record, writeSchema, recordProperties);
     Option<HoodieRecord> indexedRecord = prepareRecord(record);
     if (indexedRecord.isPresent()) {
       // Skip the ignored record.

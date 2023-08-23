@@ -165,7 +165,7 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys(HoodieTableConfig.CDC_ENABLED.key())
       .withDescription("When enable, persist the change data if necessary, and can be queried as a CDC query mode");
 
-  public static final ConfigOption<Boolean> SAVEPOINT_FILTER_BY_ENENT_TIME = ConfigOptions
+  public static final ConfigOption<Boolean> SAVEPOINT_FILTER_BY_EVENT_TIME = ConfigOptions
       .key("savepoint.read.filterby.eventtime")
       .booleanType()
       .defaultValue(false)
@@ -175,6 +175,18 @@ public class FlinkOptions extends HoodieConfig {
       .key("savepoint.read.date")
       .stringType()
       .noDefaultValue()
+      .withDescription("");
+
+  public static final ConfigOption<Boolean> AUTO_SAVEPOINT_ENABLED = ConfigOptions
+      .key("savepoint.auto.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("");
+
+  public static final ConfigOption<String> SAVEPOINT_WRITE_TIME_EXPRESSION = ConfigOptions
+      .key("savepoint.write.time.expression")
+      .stringType()
+      .defaultValue("")
       .withDescription("");
 
   public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
@@ -585,23 +597,6 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(true) // default true for MOR write
       .withDescription("Async Compaction, enabled by default for MOR");
-
-  public static final ConfigOption<Boolean> AUTO_SAVEPOINT_ENABLED = ConfigOptions
-      .key("savepoint.write.enabled")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("");
-  public static final ConfigOption<Boolean> SAVEPOINT_RECORD_EVENT_TIME = ConfigOptions
-      .key("savepoint.write.record.eventtime")
-      .booleanType()
-      .defaultValue(true)
-      .withDescription("");
-
-  public static final ConfigOption<String> SAVEPOINT_WRITE_TIME_EXPRESSION = ConfigOptions
-      .key("savepoint.write.time.expression")
-      .stringType()
-      .defaultValue("")
-      .withDescription("");
 
   public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
       .key("compaction.tasks")

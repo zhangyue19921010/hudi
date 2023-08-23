@@ -53,7 +53,8 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private final String user;
   private final String comment;
-  private String eventTime = null;
+  private String recordMinEventTime = null;
+  private String savepointDateBoundary = null;
   private final HoodieTableType tableType;
 
   public SavepointActionExecutor(HoodieEngineContext context,
@@ -74,11 +75,13 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
                                  String instantTime,
                                  String user,
                                  String comment,
-                                 String eventTime) {
+                                 String recordMinEventTime,
+                                 String savepointDateBoundary) {
     super(context, config, table, instantTime);
     this.user = user;
     this.comment = comment;
-    this.eventTime = eventTime;
+    this.recordMinEventTime = recordMinEventTime;
+    this.savepointDateBoundary = savepointDateBoundary;
     this.tableType = table.getMetaClient().getTableType();
   }
 
@@ -157,14 +160,10 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
             });
           }
         });
-        if (deltaFilesHasNoDataFile.isEmpty()) {
-          return new ImmutablePair<>(partitionPath, Pair.of(dataFiles, null));
-        } else {
-          return new ImmutablePair<>(partitionPath, Pair.of(dataFiles, deltaFilesHasNoDataFile));
-        }
+        return new ImmutablePair<>(partitionPath, Pair.of(dataFiles, deltaFilesHasNoDataFile));
       }, null);
     }
-    return TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFiles, eventTime);
+    return TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFiles, recordMinEventTime, savepointDateBoundary);
   }
 
   /**

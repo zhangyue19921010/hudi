@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -31,11 +32,14 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
@@ -54,6 +58,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,7 +70,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -154,9 +158,7 @@ public class IncrementalInputSplits implements Serializable {
     final String startCommit;
     final String endCommit;
     if (queryType.equalsIgnoreCase(FlinkOptions.QUERY_TYPE_SAVEPOINT)) {
-      startCommit = "earliest";
-      // end commit is the savepoint instant.
-      endCommit = setUpSavepointEndCommit(metaClient);
+      return inputSplitsBasedOnSavepoint(metaClient, commitTimeline);
     } else {
       startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
       endCommit = this.conf.getString(FlinkOptions.READ_END_COMMIT);
@@ -257,14 +259,51 @@ public class IncrementalInputSplits implements Serializable {
     return Result.instance(inputSplits, endInstant);
   }
 
-  private String setUpSavepointEndCommit(HoodieTableMetaClient metaClient) {
-    String finalOffset = this.conf.getString(FlinkOptions.SAVE_POINT_READ_DATE);
-    if (finalOffset == null) {
-      Option<HoodieInstant> latestSavepointCommit = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().lastInstant();
-      finalOffset = latestSavepointCommit.isPresent() ? latestSavepointCommit.get().getTimestamp() : null;
+  private Result inputSplitsBasedOnSavepoint(HoodieTableMetaClient metaClient, HoodieTimeline commitTimeline) {
+    String endInstant = setUpSavepointEndCommit(metaClient);
+    final InstantRange instantRange = InstantRange.builder().startInstant(null).endInstant(endInstant)
+        .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(true).build();
+    FileIndex fileIndex = getFileIndex();
+    Set<String> readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
+    if (readPartitions.size() == 0) {
+      LOG.warn("No partitions found for reading in user provided path.");
+      return Result.EMPTY;
     }
-    LOG.info("Savepoint view read up to " + finalOffset);
-    return finalOffset;
+    final FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
+    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+        fileStatuses, readPartitions, endInstant, instantRange, false);
+
+    return Result.instance(inputSplits, endInstant);
+  }
+
+  private String setUpSavepointEndCommit(HoodieTableMetaClient metaClient) {
+    String savepointReadDate = this.conf.getString(FlinkOptions.SAVE_POINT_READ_DATE);
+    String savepointInstantTime = null;
+    if (savepointReadDate != null) {
+      try {
+        long pickupEventTimestamp = Long.MAX_VALUE;
+        long savepointReadTimestamp = HoodieInstantTimeGenerator.parseDateFromInstantTime(savepointReadDate).getTime();
+        HoodieTimeline timeline = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+        for (HoodieInstant instant : timeline.getInstants()) {
+          String instantTimestamp = instant.getTimestamp();
+          HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+              timeline.getInstantDetails(instant).get());
+          String recordMinEventTime = metadata.getRecordMinEventTime();
+          long recordMinEventTimestamp = Long.parseLong(recordMinEventTime);
+          if (recordMinEventTimestamp > savepointReadTimestamp && recordMinEventTimestamp < pickupEventTimestamp) {
+            savepointInstantTime = instantTimestamp;
+            pickupEventTimestamp = recordMinEventTimestamp;
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("Error when reading savepoint from instant timeline.", e);
+      }
+    } else {
+      // get the latest savepoint
+      savepointInstantTime = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
+    }
+    LOG.info("Savepoint view read up to " + savepointInstantTime);
+    return savepointInstantTime;
   }
 
   /**

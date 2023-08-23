@@ -576,7 +576,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                                     String instantToSavepoint,
                                                     String user,
                                                     String comment,
-                                                    String eventTime);
+                                                    String eventTime,
+                                                    String scheduleTime);
 
   /**
    * Restore the table to the given instant. Note that this is a admin table recovery operation

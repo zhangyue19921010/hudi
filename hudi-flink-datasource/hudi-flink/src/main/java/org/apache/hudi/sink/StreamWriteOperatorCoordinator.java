@@ -22,19 +22,24 @@ import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieCronExpression;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WatermarkEvent;
@@ -61,6 +66,7 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -133,6 +139,7 @@ public class StreamWriteOperatorCoordinator
    * write instant, then the instant succeed and we can commit it.
    */
   private transient WriteMetadataEvent[] eventBuffer;
+
   private transient ConcurrentHashMap<Integer, Option<WatermarkEvent>> watermarkMap;
 
   /**
@@ -168,11 +175,13 @@ public class StreamWriteOperatorCoordinator
   private CkpMetadata ckpMetadata;
 
   private transient AtomicBoolean isSavepointInProgress = new AtomicBoolean(false);
-  private transient Boolean keepEventTimeInSavepoint;
+  private transient Boolean keepEventTimeInCommit;
 
   private HoodieCronExpression cronExpression;
   private transient Option<String> latestSavepointTime;
   private Date nextSavepointDate;
+  private Option<Long> eventTimeMin = Option.empty();
+  private Option<Long> eventTimeMax = Option.empty();
 
   /**
    * Constructs a StreamingSinkOperatorCoordinator.
@@ -268,23 +277,26 @@ public class StreamWriteOperatorCoordinator
           // for streaming mode, commits the ever received events anyway,
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
-          final boolean committed = commitInstant(this.instant, checkpointId);
+          final Pair<Boolean, List<WriteStatus>> committedPair = commitInstant(this.instant, checkpointId);
+          boolean committed = committedPair.getLeft();
 
           if (tableState.autoSavepoint && committed) {
-            isSavepointInProgress.set(SavepointUtil.isSavepointInProgress(watermarkMap, instant, nextSavepointDate) && keepEventTimeInSavepoint);
-            if (isSavepointInProgress.get()) {
-              boolean finished = SavepointUtil.doSavepoint(watermarkMap, writeClient, instant, nextSavepointDate);
-              if (finished) {
-                resetWatermarkBuffer();
-                this.isSavepointInProgress.set(false);
-                this.latestSavepointTime = getLatestSavepointTime();
-                ValidationUtils.checkState(
-                    latestSavepointTime.isPresent() && latestSavepointTime.get().equalsIgnoreCase(instant),
-                    String.format("Latest Savepoint instant %s from active timeline are not aligned with current commit instant %s",
-                        latestSavepointTime.get(), instant));
-                this.nextSavepointDate = cronExpression.getNextInvalidTimeAfter(new Date(Long.parseLong(latestSavepointTime.get())));
-                LOG.info("Auto do savepoint is finished, next schedule date is " + nextSavepointDate);
-              }
+            boolean finished;
+            if (keepEventTimeInCommit) {
+              // update event time min/max based on current commit statues
+              updateEventTimeMinMax(committedPair.getRight());
+              isSavepointInProgress.set(SavepointUtil.isSavepointInProgress(this.eventTimeMax, nextSavepointDate));
+              finished = SavepointUtil.doSavepoint(compareAndGetFinalEventTimeMin(watermarkMap, eventTimeMin), writeClient, instant, nextSavepointDate);
+            } else {
+              finished = SavepointUtil.doSavepointDirectly(Option.of(Long.parseLong(instant)), writeClient, instant, nextSavepointDate.getTime());
+            }
+
+            if (finished) {
+              resetWatermarkBuffer();
+              this.isSavepointInProgress.set(false);
+              this.latestSavepointTime = Option.of(instant);
+              this.nextSavepointDate = cronExpression.getNextValidTimeAfter(new Date(Long.parseLong(latestSavepointTime.get())));
+              LOG.info("Auto savepoint is finished, next schedule date is " + nextSavepointDate);
             }
           }
 
@@ -307,6 +319,29 @@ public class StreamWriteOperatorCoordinator
           }
         }, "commits the instant %s", this.instant
     );
+  }
+
+  /**
+   *
+   * @param watermarkMap
+   * @param eventTimeMin
+   * @return eventTimeMin could be Option.empty()
+   */
+  private Option<Long> compareAndGetFinalEventTimeMin(ConcurrentHashMap<Integer, Option<WatermarkEvent>> watermarkMap, Option<Long> eventTimeMin) {
+    if (watermarkMap.isEmpty()) {
+      return eventTimeMin;
+    }
+    Option<Long> minWatermark = Option.empty();
+    for (Option<WatermarkEvent> event : watermarkMap.values()) {
+      if (event == null || !event.isPresent()) {
+        LOG.info("There is empty watermarks, skip current savepoint");
+        return Option.empty();
+      }
+      Long watermarkTime = event.get().getWatermarkTime();
+
+      minWatermark = minWatermark.isPresent() ? Option.of(Math.min(minWatermark.get(), watermarkTime)) : Option.of(watermarkTime);
+    }
+    return minWatermark;
   }
 
   @Override
@@ -334,7 +369,7 @@ public class StreamWriteOperatorCoordinator
             }, "handle write metadata event for instant %s", this.instant
         );
       }
-    } else if (operatorEvent instanceof WatermarkEvent && tableState.autoSavepoint) {
+    } else if (tableState.autoSavepoint && this.keepEventTimeInCommit && operatorEvent instanceof WatermarkEvent) {
       // deal with WatermarkEvent
       WatermarkEvent event = (WatermarkEvent) operatorEvent;
       watermarksHandler.execute(
@@ -357,7 +392,7 @@ public class StreamWriteOperatorCoordinator
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
     // reset the event
     this.eventBuffer[i] = null;
-    this.watermarkMap.put(i, Option.empty());
+    this.watermarkMap.remove(i);
     LOG.warn("Reset the event for task [" + i + "]", throwable);
   }
 
@@ -386,12 +421,57 @@ public class StreamWriteOperatorCoordinator
         .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
         .waitForTasksFinish(true).build();
     this.isSavepointInProgress = new AtomicBoolean(false);
-    this.keepEventTimeInSavepoint = conf.get(FlinkOptions.SAVEPOINT_RECORD_EVENT_TIME);
-    this.cronExpression = new HoodieCronExpression(conf.get(FlinkOptions.SAVEPOINT_WRITE_TIME_EXPRESSION));
+    this.keepEventTimeInCommit = writeClient.getConfig().needRecordEventTimeInCommit();
     this.latestSavepointTime = getLatestSavepointTime();
+    if (keepEventTimeInCommit) {
+      initEventTimeMinMax();
+    }
+    this.cronExpression = new HoodieCronExpression(conf.get(FlinkOptions.SAVEPOINT_WRITE_TIME_EXPRESSION));
     this.nextSavepointDate = cronExpression.getNextValidTimeAfter(latestSavepointTime.isPresent()
         ? new Date(Long.parseLong(latestSavepointTime.get())) : new Date());
     LOG.info("Auto do savepoint is enabled, next schedule date is " + nextSavepointDate);
+  }
+
+  private void initEventTimeMinMax() {
+    HoodieTimer timer = HoodieTimer.start();
+    HoodieTimeline commitAfterSavepoint = metaClient.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().findInstantsAfter(latestSavepointTime.orElseGet(() -> HoodieTimeline.INIT_INSTANT_TS));
+    commitAfterSavepoint.getInstants().forEach(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata =
+            HoodieCommitMetadata.fromBytes(commitAfterSavepoint.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+
+        for (HoodieWriteStat stat : commitMetadata.getWriteStats()) {
+          if (stat.getMaxEventTime() != null) {
+            this.eventTimeMax = this.eventTimeMax.isPresent() ? Option.of(Math.max(this.eventTimeMax.get(), stat.getMaxEventTime()))
+                : Option.of( stat.getMaxEventTime());
+          }
+          if (stat.getMinEventTime() != null) {
+            this.eventTimeMin = this.eventTimeMin.isPresent() ? Option.of(Math.min(this.eventTimeMin.get(), stat.getMinEventTime()))
+                : Option.of( stat.getMinEventTime());
+          }
+        }
+      } catch (IOException ioe) {
+        throw new HoodieIOException("", ioe);
+      }
+    });
+    LOG.info(String.format("Refresh event time cache finished, spent: %d ms, current event time max is %s, event time min is %s",
+        timer.endTimer(),
+        eventTimeMax.isPresent() ? new Date(eventTimeMax.get()) : null,
+        eventTimeMin.isPresent() ? new Date(eventTimeMin.get()) : null));
+  }
+
+  private void updateEventTimeMinMax(List<WriteStatus> writeStatuses) {
+    writeStatuses.forEach(writeStatus -> {
+      Long currentMinEventTime = writeStatus.getStat().getMinEventTime();
+      Long currentMaxEventTime = writeStatus.getStat().getMaxEventTime();
+      if (currentMinEventTime != null) {
+        this.eventTimeMin = this.eventTimeMin.isPresent() ? Option.of(Math.min(eventTimeMin.get(), currentMinEventTime)) : Option.of(currentMinEventTime);
+      }
+      if (currentMaxEventTime != null) {
+        this.eventTimeMax = this.eventTimeMax.isPresent() ? Option.of(Math.max(eventTimeMax.get(), currentMaxEventTime)) : Option.of(currentMaxEventTime);
+      }
+    });
   }
 
   private Option<String> getLatestSavepointTime() {
@@ -569,7 +649,7 @@ public class StreamWriteOperatorCoordinator
    * Commits the instant.
    */
   private boolean commitInstant(String instant) {
-    return commitInstant(instant, -1);
+    return commitInstant(instant, -1).getLeft();
   }
 
   /**
@@ -577,10 +657,10 @@ public class StreamWriteOperatorCoordinator
    *
    * @return true if the write statuses are committed successfully.
    */
-  private boolean commitInstant(String instant, long checkpointId) {
+  private Pair<Boolean, List<WriteStatus>> commitInstant(String instant, long checkpointId) {
     if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
       // The last checkpoint finished successfully.
-      return false;
+      return Pair.of(false, new ArrayList<>());
     }
 
     List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
@@ -596,10 +676,10 @@ public class StreamWriteOperatorCoordinator
       // If this checkpoint has no inputs while the next checkpoint has inputs,
       // the 'isConfirming' flag should be switched with the ack event.
       sendCommitAckEvents(checkpointId);
-      return false;
+      return Pair.of(false, new ArrayList<>());
     }
     doCommit(instant, writeResults);
-    return true;
+    return Pair.of(true, writeResults);
   }
 
   /**
