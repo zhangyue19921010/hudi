@@ -170,7 +170,7 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void handleWatermark(Watermark mark) throws Exception {
-    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED)) {
+    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED) && writeClient.getConfig().needRecordEventTimeInCommit()) {
       final WatermarkEvent event = WatermarkEvent.builder()
           .taskID(taskID)
           .instant(currentInstant)
@@ -192,7 +192,7 @@ public abstract class AbstractStreamWriteFunction<I>
   }
 
   private void uploadWatermarkEvent() throws Exception {
-    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED)) {
+    if (this.config.get(FlinkOptions.AUTO_SAVEPOINT_ENABLED) && writeClient.getConfig().needRecordEventTimeInCommit()) {
       ValidationUtils.checkArgument(watermark.get() != null && watermark.get().iterator().hasNext(),
           "WHF? Watermark value is null? please check the water mark related logic.");
       WatermarkEvent event = watermark.get().iterator().next();

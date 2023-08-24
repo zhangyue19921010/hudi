@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieCronExpression;
@@ -288,7 +289,8 @@ public class StreamWriteOperatorCoordinator
               isSavepointInProgress.set(SavepointUtil.isSavepointInProgress(this.eventTimeMax, nextSavepointDate));
               finished = SavepointUtil.doSavepoint(compareAndGetFinalEventTimeMin(watermarkMap, eventTimeMin), writeClient, instant, nextSavepointDate);
             } else {
-              finished = SavepointUtil.doSavepointDirectly(Option.of(Long.parseLong(instant)), writeClient, instant, nextSavepointDate.getTime());
+              finished = SavepointUtil.doSavepoint(Option.of(HoodieInstantTimeGenerator.parseDateFromInstantTime(instant).getTime()),
+                  writeClient, instant, nextSavepointDate);
             }
 
             if (finished) {
