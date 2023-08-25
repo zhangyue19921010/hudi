@@ -286,6 +286,7 @@ public class FlinkOptions extends HoodieConfig {
           + "Default: snapshot");
 
   public static final String REALTIME_SKIP_MERGE = "skip_merge";
+  public static final String REALTIME_SKIP_COMBINE = "skip_combine";
   public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
   public static final ConfigOption<String> MERGE_TYPE = ConfigOptions
       .key("hoodie.datasource.merge.type")
@@ -294,7 +295,8 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in\n"
           + "1) skip_merge: read the base file records plus the log file records;\n"
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
-          + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
+          + "   log file records(combines the two records with same key for base and log file records), then read the left log file records\n"
+          + "3) skip_combine: read the base file records and all log file records with no combine or pre-combine actions.");
 
   public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")

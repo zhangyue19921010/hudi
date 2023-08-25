@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
@@ -64,21 +65,23 @@ public class JDCompactionPlanSourceFunction extends CompactionPlanSourceFunction
    * compaction plan instant -> compaction plan
    */
   private List<Pair<String, HoodieCompactionPlan>> compactionPlans;
-  private final HoodieFlinkTable<?> table;
+  private HoodieFlinkTable<?> table;
 
-  private final HoodieFlinkWriteClient<?> writeClient;
+  private HoodieFlinkWriteClient<?> writeClient;
 
   private final FlinkCompactionConfig cfg;
+  private final Configuration conf;
 
-  public JDCompactionPlanSourceFunction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient<?> writeClient, FlinkCompactionConfig cfg) {
+  public JDCompactionPlanSourceFunction(Configuration conf, FlinkCompactionConfig cfg) {
     super(new ArrayList<>());
-    this.table = table;
-    this.writeClient = writeClient;
+    this.conf = conf;
     this.cfg = cfg;
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
+    this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
+    this.table = writeClient.getHoodieTable();
     if (noCompactionPlans()) {
       // generate compaction plans
       this.compactionPlans = getCompactionPlans();

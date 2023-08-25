@@ -677,8 +677,10 @@ public class StreamWriteOperatorCoordinator
       // Send commit ack event to the write function to unblock the flushing
       // If this checkpoint has no inputs while the next checkpoint has inputs,
       // the 'isConfirming' flag should be switched with the ack event.
-      sendCommitAckEvents(checkpointId);
-      return Pair.of(false, new ArrayList<>());
+      if (checkpointId != -1) {
+        sendCommitAckEvents(checkpointId);
+      }
+      return Pair.of(false, writeResults);
     }
     doCommit(instant, writeResults);
     return Pair.of(true, writeResults);

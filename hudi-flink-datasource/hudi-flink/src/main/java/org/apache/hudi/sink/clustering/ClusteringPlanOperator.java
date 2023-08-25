@@ -37,6 +37,8 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Operator that generates the clustering plan with pluggable strategies on finished checkpoints.
@@ -45,6 +47,8 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
  */
 public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPlanEvent>
     implements OneInputStreamOperator<Object, ClusteringPlanEvent> {
+
+  protected static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanOperator.class);
 
   /**
    * Config options.

@@ -56,7 +56,7 @@ public class JDHoodieFlinkCompactor extends HoodieFlinkCompactor {
     @Override
     protected void compact() throws Exception {
       StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-      env.addSource(new JDCompactionPlanSourceFunction(table, writeClient, cfg))
+      env.addSource(new JDCompactionPlanSourceFunction(conf, cfg))
           .name("JD_compaction_source")
           .uid("JD_uid_compaction_source")
           .rebalance()
