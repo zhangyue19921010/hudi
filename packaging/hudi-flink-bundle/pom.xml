@@ -171,19 +171,6 @@
                   <pattern>org.objenesis.</pattern>
                   <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
                 </relocation>
-
-                <relocation>
-                  <pattern>javax.servlet.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.avro.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.io.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
-                </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.yammer.metrics.</shadedPattern>
@@ -193,24 +180,196 @@
                   <shadedPattern>${flink.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.codahale.metrics.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.codahale.metrics.</shadedPattern>
+                  <pattern>io.javalin.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}io.javalin.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>kotlin.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}kotlin.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.rocksdb.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.rocksdb.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.antlr.stringtemplate.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.antlr.stringtemplate.</shadedPattern>
+                </relocation>
+
+                <!-- Parquet -->
+                <relocation>
+                  <pattern>org.apache.parquet.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.joda.time.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.joda.time.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.com.fasterxml.jackson.annotation.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}shaded.parquet.com.fasterxml.jackson.annotation.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.com.fasterxml.jackson.databind.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}shaded.parquet.com.fasterxml.jackson.databind.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.core.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.core.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.annotation.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.annotation.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.databind.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.databind.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.com.fasterxml.jackson.core.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}shaded.parquet.com.fasterxml.jackson.core.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>com.lmax.disruptor.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.lmax.disruptor.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.github.davidmoten.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.github.davidmoten.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.github.benmanes.caffeine.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.github.benmanes.caffeine.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.twitter.bijection.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.twitter.bijection.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>io.dropwizard.metrics.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}io.dropwizard.metrics.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>io.prometheus.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}io.prometheus.</shadedPattern>
+                </relocation>
+
+                <!-- Used for HUDI TimelineService -->
+                <relocation>
+                  <pattern>org.eclipse.jetty.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.eclipse.jetty.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.eclipse.jetty.websocket.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.eclipse.jetty.websocket.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>javax.servlet.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.flink.json.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.flink.json.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.flink.hadoopcompatibility.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.flink.hadoopcompatibility.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.flink.parquet.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.flink.parquet.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.hive.common.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.service.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.service.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.service.rpc.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.service.rpc.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.exec.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.exec.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.standalone.metastore.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.standalone.metastore.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.metastore.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.metastore.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.jdbc.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.datanucleus.core.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.datanucleus.core.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.datanucleus.api.jdo.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.datanucleus.api.jdo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.org.apache.thrift.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}shaded.parquet.org.apache.thrift.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.orc.core.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.orc.core.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.codec.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.eclipse.jetty.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.jetty.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.fasterxml.jackson.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.codahale.metrics.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.codahale.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.uber.hoodie.hadoop.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.uber.hoodie.hadoop.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.davidmoten.hilbert.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.davidmoten.hilbert.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.it.unimi.dsi.fastutil.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}shaded.parquet.it.unimi.dsi.fastutil.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.net.openhft.hashing.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}shaded.parquet.net.openhft.hashing.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -220,7 +379,12 @@
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/maven/**</exclude>
+                    <exclude>META-INF/native/**</exclude>
+                    <exclude>META-INF/versions/**</exclude>
+                    <exclude>META-INF/native-image/**</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>mozilla/**</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
                   </excludes>

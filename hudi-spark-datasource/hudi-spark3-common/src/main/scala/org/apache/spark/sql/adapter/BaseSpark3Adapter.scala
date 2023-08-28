@@ -123,23 +123,5 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
-  /**
-   * Converts instance of [[StorageLevel]] to a corresponding string
-   */
-  override def convertStorageLevelToString(level: StorageLevel): String = level match {
-    case NONE => "NONE"
-    case DISK_ONLY => "DISK_ONLY"
-    case DISK_ONLY_2 => "DISK_ONLY_2"
-    case DISK_ONLY_3 => "DISK_ONLY_3"
-    case MEMORY_ONLY => "MEMORY_ONLY"
-    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
-    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
-    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
-    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
-    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
-    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
-    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
-    case OFF_HEAP => "OFF_HEAP"
-    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
-  }
+  override def convertStorageLevelToString(level: StorageLevel): String
 }

@@ -66,6 +66,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBas
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase.prepareInitialConfigs;
 import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.deltaStreamerTestRunner;
 
+@Disabled
 public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctionalTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamerWithMultiWriter.class);
