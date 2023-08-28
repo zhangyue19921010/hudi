@@ -109,6 +109,7 @@
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
+                  <include>com.fasterxml.jackson.core:*</include>
 
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
@@ -128,54 +129,113 @@
                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->
-                <relocation>
-                  <pattern>org.apache.spark.sql.avro.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
-                </relocation>
+
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.yammer.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                  <pattern>io.javalin.</pattern>
+                  <shadedPattern>org.apache.hudi.io.javalin.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
                 </relocation>
+
                 <relocation>
-                  <pattern>org.apache.commons.io.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                  <pattern>org.eclipse.jetty.</pattern>
+                  <shadedPattern>org.apache.hudi.org.eclipse.jetty.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.jetbrains.</pattern>
+                  <shadedPattern>org.apache.hudi.org.jetbrains.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.rocksdb.</pattern>
+                  <shadedPattern>org.apache.hudi.org.rocksdb.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.antlr.stringtemplate.</pattern>
+                  <shadedPattern>org.apache.hudi.org.antlr.stringtemplate.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>com.lmax.disruptor.</pattern>
+                  <shadedPattern>org.apache.hudi.com.lmax.disruptor.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.github.davidmoten.</pattern>
+                  <shadedPattern>org.apache.hudi.com.github.davidmoten.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.github.benmanes.caffeine.</pattern>
+                  <shadedPattern>org.apache.hudi.com.github.benmanes.caffeine.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.twitter.bijection.</pattern>
+                  <shadedPattern>org.apache.hudi.com.twitter.bijection.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>io.dropwizard.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.io.dropwizard.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.prometheus.</pattern>
+                  <shadedPattern>org.apache.hudi.io.prometheus.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.yammer.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.spark.sql.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
+                </relocation>
+
                 <!-- TODO: clean up hive dep - Revisit GH ISSUE #533 & PR#633-->
                 <relocation>
-                  <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hive.common.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hive.service.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
-                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.service.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.jdbc.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hive.jdbc.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.metastore.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.conf.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.conf.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.curator.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.curator.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
@@ -186,26 +246,56 @@
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.eclipse.jetty.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.google.common.</pattern>
-                  <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>kotlin.</pattern>
+                  <shadedPattern>org.apache.hudi.kotlin.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.uber.hoodie.hadoop.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.hoodie.hadoop.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.davidmoten.hilbert.</pattern>
+                  <shadedPattern>org.apache.hudi.org.davidmoten.hilbert.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>shaded.parquet.it.unimi.dsi.fastutil.</pattern>
+                  <shadedPattern>org.apache.hudi.shaded.parquet.it.unimi.dsi.fastutil.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.core.</pattern>
+                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.core.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.databind.</pattern>
+                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.databind.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.annotation.</pattern>
+                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.annotation.</shadedPattern>
+                </relocation>
+
               </relocations>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>mozilla/**</exclude>
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/maven/**</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>META-INF/native/**</exclude>
+                    <exclude>META-INF/native-image/**</exclude>
+                    <exclude>META-INF/versions/**</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
                     <!-- hbase-default.xml comes from hbase-common, hbase related classes used in hudi are in shaded
