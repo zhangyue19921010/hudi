@@ -487,6 +487,7 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
       case QUERY_TYPE_SNAPSHOT_OPT_VAL => HoodieTableQueryType.SNAPSHOT
       case QUERY_TYPE_INCREMENTAL_OPT_VAL => HoodieTableQueryType.INCREMENTAL
       case QUERY_TYPE_READ_OPTIMIZED_OPT_VAL => HoodieTableQueryType.READ_OPTIMIZED
+      case QUERY_TYPE_SAVEPOINT_OPT_VAL => HoodieTableQueryType.SAVEPOINT
       case _ @ qt => throw new IllegalArgumentException(s"query-type ($qt) not supported")
     }
   }

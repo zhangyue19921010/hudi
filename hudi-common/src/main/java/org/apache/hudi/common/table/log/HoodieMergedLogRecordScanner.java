@@ -90,7 +90,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
-  private boolean savepointViewEnable = false;
   private boolean savepointViewFilterByEventTime = false;
   private long savepointDateBoundary;
 
@@ -134,8 +133,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        InternalSchema internalSchema,
                                        Option<String> keyFieldOverride,
                                        boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                       boolean savepointViewEnable,
-                                       boolean savepointViewFilterByEventTime) {
+                                       boolean savepointViewFilterByEventTime, Long savepointDateBoundary) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger);
     try {
@@ -147,25 +145,28 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
-    setupSavepointView(savepointViewEnable, savepointViewFilterByEventTime, instantRange);
+    setupSavepointView(savepointViewFilterByEventTime, instantRange, savepointDateBoundary);
     if (forceFullScan) {
       performScan();
     }
   }
 
-  private void setupSavepointView(boolean savepointViewEnable, boolean savepointViewFilterByEventTime, Option<InstantRange> instantRange) {
-    HoodieTimeline spTimeline = hoodieTableMetaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
-    if (savepointViewEnable && savepointViewFilterByEventTime &&
-        instantRange.isPresent() && spTimeline.containsInstant(instantRange.get().endInstant)) {
-      this.savepointViewEnable = true;
+  private void setupSavepointView(boolean savepointViewFilterByEventTime,
+                                  Option<InstantRange> instantRange, Long savepointDateBoundary) {
+    if (savepointViewFilterByEventTime) {
       this.savepointViewFilterByEventTime = true;
-      try {
-        HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-            spTimeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantRange.get().endInstant)).get());
-        this.savepointDateBoundary = Long.parseLong(metadata.getSavepointDateBoundary());
-      } catch (Exception e) {
-        throw new HoodieException("", e);
-      }
+      this.savepointDateBoundary = savepointDateBoundary != null ? savepointDateBoundary : getBoundaryFromInstant(instantRange);
+    }
+  }
+
+  private long getBoundaryFromInstant(Option<InstantRange> instantRange) {
+    try {
+      HoodieTimeline spTimeline = hoodieTableMetaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+      HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+          spTimeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantRange.get().endInstant)).get());
+      return Long.parseLong(metadata.getSavepointDateBoundary());
+    } catch (Exception e) {
+      throw new HoodieException("", e);
     }
   }
 
@@ -288,7 +289,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
-    if (savepointViewEnable && savepointViewFilterByEventTime) {
+    if (savepointViewFilterByEventTime) {
       Long recordEventTime = ((Number) newRecord.
           getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps())).longValue();
       if (recordEventTime.compareTo(savepointDateBoundary) > 0) {
@@ -326,7 +327,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    if (savepointViewEnable && savepointViewFilterByEventTime) {
+    if (savepointViewFilterByEventTime) {
       Long recordEventTime = ((Number) deleteRecord.getOrderingValue()).longValue();
       if (recordEventTime.compareTo(savepointDateBoundary) > 0) {
         return;
@@ -401,8 +402,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // Use scanV2 method.
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger;
-    private boolean savepointViewEnable;
-    private boolean savepointViewFilterByEventTime;
+    private boolean savepointViewEnable = false;
+    private boolean savepointViewFilterByEventTime = false;
+    private Long savepointBoundaryDate = null;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -510,9 +512,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
-    public Builder withSavepointView(boolean enable, boolean filterByEventTime) {
-      this.savepointViewEnable = enable;
+    public Builder withSavepointView(boolean filterByEventTime, Long savepointBoundaryDate) {
       this.savepointViewFilterByEventTime = filterByEventTime;
+      this.savepointBoundaryDate = savepointBoundaryDate;
       return this;
     }
 
@@ -538,7 +540,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
-          savepointViewEnable, savepointViewFilterByEventTime);
+          savepointViewFilterByEventTime, savepointBoundaryDate);
     }
   }
 }

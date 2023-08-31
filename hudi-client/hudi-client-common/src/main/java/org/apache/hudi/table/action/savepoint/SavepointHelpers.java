@@ -18,14 +18,30 @@
 
 package org.apache.hudi.table.action.savepoint;
 
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class SavepointHelpers {
 
@@ -68,6 +84,73 @@ public class SavepointHelpers {
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
       throw new HoodieRollbackException("No savepoint for instantTime " + savepointTime);
+    }
+  }
+
+  public static String getSavepointEndCommit(HoodieTableMetaClient metaClient, String savepointReadDate) {
+    String savepointInstantTime = null;
+    if (savepointReadDate != null) {
+      try {
+        long pickupEventTimestamp = Long.MAX_VALUE;
+        long savepointReadTimestamp = HoodieInstantTimeGenerator.parseDateFromInstantTime(savepointReadDate).getTime();
+        HoodieTimeline timeline = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+        for (HoodieInstant instant : timeline.getInstants()) {
+          String instantTimestamp = instant.getTimestamp();
+          HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+              timeline.getInstantDetails(instant).get());
+          String recordMinEventTime = metadata.getRecordMinEventTime();
+          long recordMinEventTimestamp = Long.parseLong(recordMinEventTime);
+          if (recordMinEventTimestamp > savepointReadTimestamp && recordMinEventTimestamp < pickupEventTimestamp) {
+            savepointInstantTime = instantTimestamp;
+            pickupEventTimestamp = recordMinEventTimestamp;
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("Error when reading savepoint from instant timeline.", e);
+      }
+    } else {
+      // get the latest savepoint
+      savepointInstantTime = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
+    }
+    LOG.info("Savepoint view read up to " + savepointInstantTime);
+    return savepointInstantTime;
+  }
+
+  public static List<FileStatus> convertFileSliceIntoFileStatusUnchecked(List<FileSlice> fileSlices) {
+    return fileSlices.parallelStream().flatMap(fileSlice -> {
+      Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
+      List<FileStatus> fileStatuses = fileSlice.getLogFiles().map(HoodieLogFile::getFileStatus).collect(Collectors.toList());
+      if (baseFile.isPresent()) {
+        fileStatuses.add(baseFile.get().getFileStatus());
+      }
+      return fileStatuses.stream();
+    }).collect(Collectors.toList());
+  }
+
+  public static List<String> getPartitionsFromSavepoint(HoodieTableMetaClient metaClient, String instantTime) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+    try {
+      HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+          timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime)).get());
+      return metadata.getPartitionMetadata().values().stream()
+          .map(HoodieSavepointPartitionMetadata::getPartitionPath).collect(Collectors.toList());
+    } catch (IOException e) {
+      LOG.warn("Error when reading savepoint from instant timeline.", e);
+    }
+    return new ArrayList<>();
+  }
+
+  public static Long getBoundaryFromInstant(String instant, HoodieTableMetaClient metaClient, boolean filterBySavepointEventTime) {
+    if (!filterBySavepointEventTime) {
+      return null;
+    }
+    try {
+      HoodieTimeline spTimeline = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+      HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+          spTimeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instant)).get());
+      return Long.parseLong(metadata.getSavepointDateBoundary());
+    } catch (Exception e) {
+      throw new HoodieException("", e);
     }
   }
 }

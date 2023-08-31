@@ -152,6 +152,7 @@ public class FormatUtils {
       Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
     FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
+
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.getTablePath())
@@ -169,8 +170,8 @@ public class FormatUtils {
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
         .withRecordMerger(writeConfig.getRecordMerger())
-        .withSavepointView(flinkConf.getString(FlinkOptions.QUERY_TYPE).equalsIgnoreCase(FlinkOptions.QUERY_TYPE_SAVEPOINT),
-            flinkConf.getBoolean(FlinkOptions.SAVEPOINT_FILTER_BY_EVENT_TIME))
+        .withSavepointView(flinkConf.getString(FlinkOptions.QUERY_TYPE).equalsIgnoreCase(FlinkOptions.QUERY_TYPE_SAVEPOINT)
+            && flinkConf.getBoolean(FlinkOptions.SAVEPOINT_FILTER_BY_EVENT_TIME), null)
         .build();
   }
 

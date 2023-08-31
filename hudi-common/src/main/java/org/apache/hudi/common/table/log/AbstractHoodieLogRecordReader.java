@@ -887,7 +887,7 @@ public abstract class AbstractHoodieLogRecordReader {
       throw new UnsupportedOperationException();
     }
 
-    public abstract Builder withSavepointView(boolean enable, boolean filterByEventTime);
+    public abstract Builder withSavepointView(boolean filterByEventTime, Long savepointBoundaryDate);
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       throw new UnsupportedOperationException();

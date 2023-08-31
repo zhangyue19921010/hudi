@@ -53,6 +53,7 @@ object DataSourceReadOptions {
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
   val QUERY_TYPE_INCREMENTAL_OPT_VAL = "incremental"
+  val QUERY_TYPE_SAVEPOINT_OPT_VAL = "savepoint"
   val QUERY_TYPE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.query.type")
     .defaultValue(QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -103,6 +104,16 @@ object DataSourceReadOptions {
     .sinceVersion("0.13.0")
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
+
+  val SAVE_POINT_READ_DATE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.savepoint.read.date")
+    .noDefaultValue()
+    .withDocumentation("")
+
+  val SAVEPOINT_FILTER_BY_EVENT_TIME: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.savepoint.read.filterby.eventtime")
+    .noDefaultValue()
+    .withDocumentation("")
 
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")

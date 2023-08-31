@@ -320,6 +320,10 @@ object LogFileIterator {
           getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
       }
 
+      if (tableState.savepointViewFilterByEventTime && tableState.savepointBoundaryDate.isDefined) {
+        logRecordScannerBuilder.withSavepointView(tableState.savepointViewFilterByEventTime, tableState.savepointBoundaryDate.get)
+      }
+
       logRecordScannerBuilder.withRecordMerger(
         HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy))
 

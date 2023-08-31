@@ -79,7 +79,9 @@ case class HoodieTableState(tablePath: String,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
                             recordMergerImpls: List[String],
-                            recordMergerStrategy: String)
+                            recordMergerStrategy: String,
+                            savepointViewFilterByEventTime: Boolean = false,
+                            savepointBoundaryDate: Option[Long] = Option.empty)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]]
@@ -273,7 +275,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
-  private def queryTimestamp: Option[String] =
+  protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
 
   /**
@@ -624,7 +626,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   private def prunePartitionColumns(structType: StructType): StructType =
     StructType(structType.filterNot(f => partitionColumns.exists(pc => resolver(f.name, pc))))
 
-  private def getConfigValue(config: ConfigProperty[String],
+  protected def getConfigValue(config: ConfigProperty[String],
                              defaultValueOption: Option[String]=Option.empty): String = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))

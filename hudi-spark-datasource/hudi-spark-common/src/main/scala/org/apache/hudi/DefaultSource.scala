@@ -24,11 +24,12 @@ import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.table.action.savepoint.SavepointHelpers
 import org.apache.hudi.util.PathUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -41,6 +42,7 @@ import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
+import scala.language.postfixOps
 
 /**
   * Hoodie Spark Datasource, for reading and writing hoodie tables
@@ -100,7 +102,7 @@ class DefaultSource extends RelationProvider
       )
     } else {
       Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams) ++ sqlContext.getAllConfs
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
@@ -217,6 +219,12 @@ object DefaultSource {
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
 
+  def setupSavepointView(metaClient: HoodieTableMetaClient, parameters: Map[String, String]) = {
+    val endInstant = SavepointHelpers.getSavepointEndCommit(metaClient, parameters(DataSourceReadOptions.SAVE_POINT_READ_DATE.key))
+    parameters ++ Map(DataSourceReadOptions.BEGIN_INSTANTTIME.key -> HoodieTimeline.INIT_INSTANT_TS,
+      DataSourceReadOptions.END_INSTANTTIME.key -> endInstant, DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> endInstant)
+  }
+
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: StructType,
@@ -257,6 +265,15 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
           new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
 
+        case (MERGE_ON_READ, QUERY_TYPE_SAVEPOINT_OPT_VAL, _) => {
+          if (metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants.countInstants == 0) {
+            log.info("There is no completed savepoint commit in hudi table timeline yet, fall back to common incremental query")
+            parameters.put(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
+            new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+          } else {
+            new MergeOnReadSavepointRelation(sqlContext, setupSavepointView(metaClient, parameters), metaClient, userSchema)
+          }
+        }
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
