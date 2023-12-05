@@ -124,35 +124,53 @@ public class CleanerUtils {
 
   public static Option<HoodieInstant> getEarliestCommitToRetain(
       HoodieTimeline commitsTimeline, HoodieCleaningPolicy cleaningPolicy, int commitsRetained,
-      Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone) {
+      Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone, boolean archived) {
     HoodieTimeline completedCommitsTimeline = commitsTimeline.filterCompletedInstants();
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
 
-    if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
-        && completedCommitsTimeline.countInstants() > commitsRetained) {
-      Option<HoodieInstant> earliestPendingCommits =
-          commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
-      if (earliestPendingCommits.isPresent()) {
-        // Earliest commit to retain must not be later than the earliest pending commit
-        earliestCommitToRetain =
-            completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants() - commitsRetained).map(nthInstant -> {
-              if (nthInstant.compareTo(earliestPendingCommits.get()) <= 0) {
-                return Option.of(nthInstant);
-              } else {
-                return completedCommitsTimeline.findInstantsBefore(earliestPendingCommits.get().getTimestamp()).lastInstant();
-              }
-            }).orElse(Option.empty());
-      } else {
-        earliestCommitToRetain = completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants()
-            - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
+    switch (cleaningPolicy) {
+      case KEEP_LATEST_COMMITS: {
+        if (completedCommitsTimeline.countInstants() > commitsRetained) {
+          Option<HoodieInstant> earliestPendingCommits =
+              commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
+          if (earliestPendingCommits.isPresent()) {
+            // Earliest commit to retain must not be later than the earliest pending commit
+            earliestCommitToRetain =
+                completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants() - commitsRetained).map(nthInstant -> {
+                  if (nthInstant.compareTo(earliestPendingCommits.get()) <= 0) {
+                    return Option.of(nthInstant);
+                  } else {
+                    return completedCommitsTimeline.findInstantsBefore(earliestPendingCommits.get().getTimestamp()).lastInstant();
+                  }
+                }).orElse(Option.empty());
+          } else {
+            earliestCommitToRetain = completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants()
+                - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
+          }
+        }
+        return earliestCommitToRetain;
       }
-    } else if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-      ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
-      String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
-          HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+      case KEEP_LATEST_BY_HOURS: {
+        ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
+        String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
+        earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+            HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+        return earliestCommitToRetain;
+      }
+      case KEEP_LATEST_FILE_VERSIONS: {
+        if (archived) {
+          return earliestCommitToRetain;
+        }
+        // In KEEP_LATEST_FILE_VERSIONS mode，get last commit before earliest pending commit
+        Option<HoodieInstant> earliestPendingCommit = commitsTimeline
+            .filter(s -> !s.isCompleted()).firstInstant();
+        earliestCommitToRetain = earliestPendingCommit.isPresent() ?
+            commitsTimeline.findInstantsBefore(earliestPendingCommit.get().getTimestamp()).lastInstant() : commitsTimeline.lastInstant();
+        return earliestCommitToRetain;
+      }
+      default:
+        throw new IllegalStateException("Unknown Cleaner Policy");
     }
-    return earliestCommitToRetain;
   }
 
   /**

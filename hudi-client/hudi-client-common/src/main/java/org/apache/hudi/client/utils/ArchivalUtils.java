@@ -128,7 +128,7 @@ public class ArchivalUtils {
               ? parseDateFromInstantTime(latestCommit.get().getTimestamp()).toInstant()
               : Instant.now(),
           cleanerHoursRetained,
-          metaClient.getTableConfig().getTimelineTimezone());
+          metaClient.getTableConfig().getTimelineTimezone(), true);
     } catch (ParseException e) {
       if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().getTimestamp().startsWith(ts))) {
         LOG.warn("Error parsing instant time: " + latestCommit.get().getTimestamp());

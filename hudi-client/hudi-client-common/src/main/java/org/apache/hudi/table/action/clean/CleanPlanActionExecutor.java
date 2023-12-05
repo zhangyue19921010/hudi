@@ -107,7 +107,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned: " + config.getTableName());
-      List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
+      List<String> partitionsToClean = planner.getPartitionPathsToClean(table, earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
         LOG.info("Nothing to clean here. It is already clean");

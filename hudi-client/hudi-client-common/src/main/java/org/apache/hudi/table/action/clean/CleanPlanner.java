@@ -137,25 +137,26 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * @return list of partitions to scan for cleaning
    * @throws IOException when underlying file-system throws this exception
    */
-  public List<String> getPartitionPathsToClean(Option<HoodieInstant> earliestRetainedInstant) throws IOException {
+  public List<String> getPartitionPathsToClean(HoodieTable<T, I, K, O> table, Option<HoodieInstant> earliestRetainedInstant) throws IOException {
     switch (config.getCleanerPolicy()) {
       case KEEP_LATEST_COMMITS:
       case KEEP_LATEST_BY_HOURS:
-        return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
+        return getPartitionPathsForClean(earliestRetainedInstant);
       case KEEP_LATEST_FILE_VERSIONS:
-        return getPartitionPathsForFullCleaning();
+        // compute all the changed partitions based on instants from instant recorded in clean meta to latest instant in active timeline
+        return getPartitionPathsForClean(table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant());
       default:
         throw new IllegalStateException("Unknown Cleaner Policy");
     }
   }
 
   /**
-   * Return partition paths for cleaning by commits mode.
+   * Return partition paths for cleaning
    * @param instantToRetain Earliest Instant to retain
    * @return list of partitions
    * @throws IOException
    */
-  private List<String> getPartitionPathsForCleanByCommits(Option<HoodieInstant> instantToRetain) throws IOException {
+  private List<String> getPartitionPathsForClean(Option<HoodieInstant> instantToRetain) throws IOException {
     if (!instantToRetain.isPresent()) {
       LOG.info("No earliest commit to retain. No need to scan partitions !!");
       return Collections.emptyList();
@@ -515,7 +516,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         config.getCleanerCommitsRetained(),
         Instant.now(),
         config.getCleanerHoursRetained(),
-        hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+        hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone(), false);
   }
 
   /**

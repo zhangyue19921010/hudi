@@ -37,10 +37,13 @@ import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -59,6 +62,7 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -91,6 +95,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -1092,12 +1097,15 @@ public class TestCleaner extends HoodieCleanerTestBase {
   /**
    * Test if cleaner will fall back to full clean if commit for incremental clean is archived.
    */
-  @Test
-  public void testIncrementalFallbackToFullClean() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"KEEP_LATEST_COMMITS", "KEEP_LATEST_FILE_VERSIONS"})
+  public void testIncrementalFallbackToFullClean(String policy) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withCleanConfig(
             HoodieCleanConfig.newBuilder()
+                .withCleanerPolicy(HoodieCleaningPolicy.valueOf(policy))
                 .retainCommits(1)
+                .retainFileVersions(1)
                 .withIncrementalCleaningMode(true)
                 .build())
         .withMetadataConfig(
@@ -1167,14 +1175,30 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertFalse(metaClient.getActiveTimeline().containsInstant("20"));
 
       runCleaner(config);
-      assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
-      assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
-      assertFalse(testTable.baseFileExists(p2, "30", file3P2), "Clean old FileSlice in p2");
-      assertFalse(testTable.baseFileExists(p2, "30", file4P2), "Clean old FileSlice in p2");
-      assertTrue(testTable.baseFileExists(p1, "20", file1P1), "Latest FileSlice exists");
-      assertTrue(testTable.baseFileExists(p1, "20", file2P1), "Latest FileSlice exists");
-      assertTrue(testTable.baseFileExists(p2, "40", file3P2), "Latest FileSlice exists");
-      assertTrue(testTable.baseFileExists(p2, "40", file4P2), "Latest FileSlice exists");
+      if (policy.equalsIgnoreCase("KEEP_LATEST_COMMITS")) {
+        assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
+        assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
+        assertFalse(testTable.baseFileExists(p2, "30", file3P2), "Clean old FileSlice in p2");
+        assertFalse(testTable.baseFileExists(p2, "30", file4P2), "Clean old FileSlice in p2");
+        assertTrue(testTable.baseFileExists(p1, "20", file1P1), "Latest FileSlice exists");
+        assertTrue(testTable.baseFileExists(p1, "20", file2P1), "Latest FileSlice exists");
+        assertTrue(testTable.baseFileExists(p2, "40", file3P2), "Latest FileSlice exists");
+        assertTrue(testTable.baseFileExists(p2, "40", file4P2), "Latest FileSlice exists");
+      } else {
+        HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+        TableFileSystemView fsView = table.getFileSystemView();
+
+        // make sure all the base files are existed and each base only has one version
+        List<String> fileIdsP1 = fsView.getAllFileGroups(p1).flatMap(HoodieFileGroup::getAllBaseFiles).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+        HashSet<String> uniqueFileIdsP1 = new HashSet<>(fileIdsP1);
+        assertEquals(fileIdsP1.size(), uniqueFileIdsP1.size());
+        assertEquals(fileIdsP1.size(), 2);
+
+        List<String> fileIdsP2 = fsView.getAllFileGroups(p2).flatMap(HoodieFileGroup::getAllBaseFiles).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+        HashSet<String> uniqueFileIdsP2 = new HashSet<>(fileIdsP2);
+        assertEquals(fileIdsP2.size(), uniqueFileIdsP2.size());
+        assertEquals(fileIdsP2.size(), 4);
+      }
     }
   }
 
